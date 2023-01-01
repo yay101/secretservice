@@ -1,0 +1,60 @@
+:root {
+  --primary: black;
+  --primary-hover: gray;
+  --primary-focus: darkgray;
+  
+}
+
+body {
+  font-family: 'Montserrat', sans-serif;
+  position:relative;
+  max-width: 1200px;
+  margin:auto;
+}
+
+nav {
+  display: flex;
+  margin:auto;
+}
+
+nav div {
+  position:relative;
+  min-width: 33%;
+}
+
+nav h1 {
+  position: absolute;
+  min-width: 33%;
+}
+
+foot {
+  position: relative;
+  display: block;
+  text-align: center;
+  margin-top: 3rem;
+}
+
+.control {
+  font-size: x-large;
+  margin: 0px;
+  padding: 1rem;
+  width: min-content;
+  background: transparent;
+  border: transparent;
+}
+
+@media screen and (max-width: 1200px) {
+  body {
+    min-width: 400px;
+    width: 90%;
+  }
+  nav {
+    flex-direction: column;
+    width:max-content;
+  }
+  nav h1 {
+    position: relative;
+    margin-bottom: 0;
+    text-align: center;
+  }
+}

@@ -1,0 +1,76 @@
+<!doctype html>
+<html data-recaptcha="{{.SiteKey}}">
+    <head>
+        <title>The Secret Service</title>
+        <meta name="keywords" content="password file sharing">
+        <link rel="icon" href="/ss-ico.svg" type="image/svg+xml">
+        <link rel="stylesheet" href="\pico.min.css">
+        <link rel="stylesheet" href="\index.css">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat&display=swap" rel="stylesheet">
+        <script defer src="index.js"></script>
+        <script src="https://www.google.com/recaptcha/api.js?render={{.SiteKey}}"></script>
+    </head>
+    <body class="container">
+        <nav>
+            <div><h1 id="title">SECRET SERVICE</h1></div>
+            <label for="type">
+                Secret Format
+                <select id="type" name="type" style="width: min-content;margin-left: 1rem;" onchange="app.type(this)">
+                    <option value="string">String (Text)</option>
+                    <option value="binary">Binary (File)</option>
+                    <option value="audio">Audio (Microphone)</option>
+                    <option value="video">Video (Webcam)</option>
+                </select>
+            </label>
+            <label for="life">
+                Expiry
+                <select id="life" name="life" style="width: min-content;margin-left: 1rem;">
+                    <option value="1">1 Hours</option>
+                    <option value="2">2 Hours</option>
+                    <option value="4">4 Hours</option>
+                    <option value="8">8 Hours</option>
+                    <option value="12">12 Hours</option>
+                    <option value="24">24 Hours</option>
+                </select>
+            </label>
+        </nav>
+        <form id="form-parent" onsubmit="return false;">
+            <fieldset class="grid">
+                <label data-tooltip="Useful if the link is going to be processed before delivery eg. Exchange Email." for="hidden">
+                    <input type="checkbox" id="hidden" name="hidden" role="switch">
+                    Enable Show Button
+                </label>
+                <label data-tooltip="Enable to allow easy downloads of the file." for="download">
+                    <input type="checkbox" id="download" name="download" role="switch">
+                    Allow Downloads
+                </label>
+            </fieldset>
+            <fieldset id="form">
+
+            </fieldset>
+            <button id="submit" type="button" onclick="app.send()">Get Link</button>
+        </form>
+        <foot>Github Link When Ready</foot>
+        <script>
+            if(typeof grecaptcha === 'undefined') {
+              grecaptcha = {};
+            }
+            grecaptcha.ready = function(cb){
+              if(typeof grecaptcha === 'undefined') {
+                const c = '___grecaptcha_cfg';
+                window[c] = window[c] || {};
+                (window[c]['fns'] = window[c]['fns']||[]).push(cb);
+              } else {
+                cb();
+              }
+            }
+            grecaptcha.ready(function(){
+              grecaptcha.render("container", {
+                sitekey: "ABC-123"
+              });
+            });
+          </script>          
+    </body>
+</html>

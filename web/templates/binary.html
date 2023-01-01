@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+    <head>
+        <title>The Secret Service</title>
+        <meta name="keywords" content="password file sharing">
+        <link rel="stylesheet" href="\pico.min.css">
+        <link rel="stylesheet" href="\index.css">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat&display=swap" rel="stylesheet">
+    </head>
+    <body class="container">
+        <article>
+            <header id="filename"></header>
+                <a id="downloadlink" disabled>Download</a>
+            <footer id="filesize"></footer>
+        </article>
+        <script>
+            fetch(`${window.location.origin}/blob/${window.location.pathname.split("/")[2]}/${window.location.pathname.split("/")[3]}`)
+            .then(response => response.blob())
+            .then(blob => {
+                document.getElementById("filename").innerText = blob.type;
+                document.getElementById("filesize").innerText = blob.size;
+                document.getElementById("downloadlink").href = URL.createObjectURL(blob);
+                document.getElementById("downloadlink").removeAttribute("disabled");
+            })
+            
+        </script>
+    </body>
+</html>
