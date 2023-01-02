@@ -34,20 +34,29 @@ foot {
   margin-top: 3rem;
 }
 
+links {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.icon {
+  min-width:100%;
+}
+
+.icon:not([data-theme="light"]){
+  filter: invert(0.9);
+}
+
 .control {
   font-size: x-large;
   margin: 0px;
   padding: 1rem;
-  width: min-content;
+  width: 100%;
   background: transparent;
   border: transparent;
 }
 
 @media screen and (max-width: 1200px) {
-  body {
-    min-width: 400px;
-    width: 90%;
-  }
   nav {
     flex-direction: column;
     width:max-content;

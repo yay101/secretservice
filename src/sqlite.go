@@ -104,7 +104,6 @@ func dbClean() {
 	}
 	defer rows.Close()
 	var oldSecrets Secrets
-	log.Print(rows.Next())
 	for rows.Next() {
 		var tmp Secret
 		err = rows.Scan(&tmp.Id, &tmp.Type, &tmp.Code, &tmp.Code2, &tmp.Secret, &tmp.Download, &tmp.Hidden, &tmp.Life, &tmp.Expiry)

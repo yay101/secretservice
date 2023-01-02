@@ -3,6 +3,7 @@
     <head>
         <title>The Secret Service</title>
         <meta name="keywords" content="password file sharing">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="icon" href="/ss-ico.svg" type="image/svg+xml">
         <link rel="stylesheet" href="\pico.min.css">
         <link rel="stylesheet" href="\index.css">
@@ -13,7 +14,8 @@
     <body class="container">
         <article>
             <header id="filename"></header>
-            <audio id="player" src="">Play</audio><a onclick="document.getElementById('player').play()">Play</a><a id="downloadlink" disabled>Download</a>
+            <audio id="player" src="">Play</audio>
+            <a onclick="document.getElementById('player').play()">Play</a><a id="downloadlink" disabled>Download</a>
         </article>
         <script>
             fetch(`${window.location.origin}/blob/${window.location.pathname.split("/")[2]}/${window.location.pathname.split("/")[3]}`)

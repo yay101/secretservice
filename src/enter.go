@@ -112,7 +112,7 @@ func blob(w http.ResponseWriter, r *http.Request) {
 
 func secret(w http.ResponseWriter, r *http.Request) {
 	tp := path.Join(ownPath, "/web", "/templates")
-	strip := strings.Replace(r.RequestURI, "?show=true", "", 1)
+	strip := strings.Split(r.RequestURI, "?")[0]
 	codes := strings.Split(strip, "/")
 	if len(codes) == 4 {
 		new := Secret{
@@ -120,6 +120,12 @@ func secret(w http.ResponseWriter, r *http.Request) {
 			Code2: codes[3],
 		}
 		if new.Get() {
+			agent := r.Header.Get("User-Agent")
+			if strings.Contains(agent, "facebook") {
+				log.Print("Its facebook.")
+				w.WriteHeader(400)
+				return
+			}
 			if new.Hidden {
 				r.ParseForm()
 				if !r.Form.Has("show") {
