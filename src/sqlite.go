@@ -17,6 +17,7 @@ func dbinit() {
 		return
 	} else {
 		log.Println("Successfully connected to db!")
+		os.Chmod(path.Join(ownPath, config.Database), 0700)
 	}
 	defer db.Close()
 	//prepare secrets table

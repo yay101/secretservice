@@ -52,7 +52,8 @@
             </fieldset>
             <button id="submit" type="button" onclick="app.send()">Get Link</button>
         </form>
-        <foot>Github Link When Ready</foot>
+        <links id="links"></links>
+        <foot><a href="https://github.com/yay101/secretservice">Github</a></foot>
         <script>
             if(typeof grecaptcha === 'undefined') {
               grecaptcha = {};
@@ -66,11 +67,6 @@
                 cb();
               }
             }
-            grecaptcha.ready(function(){
-              grecaptcha.render("container", {
-                sitekey: "ABC-123"
-              });
-            });
           </script>          
     </body>
 </html>

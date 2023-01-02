@@ -197,8 +197,6 @@ func service(w http.ResponseWriter, r *http.Request) {
 			Download: dow,
 			Life:     lint,
 		}
-
-		log.Print("HAS FILE")
 		f, h, err := r.FormFile("file")
 		if err != nil {
 			log.Print(err)
