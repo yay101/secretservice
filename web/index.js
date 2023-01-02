@@ -29,7 +29,7 @@ app = {
                 app.form.innerHTML = `<article style="display:flex;"><button class="control" id="audioplay" onclick="app.audio.play()">&#x23F5; Listen</button><button class="control" id="audiostart" onclick="app.audio.start()">&#x23FA; Record</button><button class="control" onclick="app.audio.cancel()">&#x23CF; Cancel</button></article>`;
             break;
             case "video":
-                app.form.innerHTML = `<article style="display:flex;margin:auto;"><video id="videoplayback" style="min-width:12rem;margin:auto;" autoplay></video><div><button class="control" id="videoplay" onclick="app.video.play()">&#x23F5; Listen</button><button class="control" id="videostart" onclick="app.video.start()">&#x23FA; Record</button><button class="control" onclick="app.video.cancel()">&#x23CF; Cancel</button></article></div>`;
+                app.form.innerHTML = `<article style="display:flex;margin:auto;"><video id="videoplayback" style="min-width:12rem;margin:auto;" autoplay></video><div><button class="control" id="videoplay" onclick="app.video.play()">&#x23F5; Watch</button><button class="control" id="videostart" onclick="app.video.start()">&#x23FA; Record</button><button class="control" onclick="app.video.cancel()">&#x23CF; Cancel</button></article></div>`;
             break;
         }
     },
@@ -172,13 +172,10 @@ app = {
             .then(response => response.json())
             .then(json => {
                 if(json.state){
-                    try{
-                        navigator.clipboard.writeText(json.url)
-                    } catch {
-                        alert(`We cannot access your clipboard, the url is: ${json.url}`)
-                    }
+                    navigator.clipboard.writeText(json.url)
                     document.getElementById("submit").setAttribute("aria-invalid","false")
                     document.getElementById("submit").innerText = "Success: Link copied to clipboard!"
+                    document.getElementById("links").innerHTML += `<link><div>${document.getElementById("type").value.toUpperCase()}</div> <a href="${json.url}">${json.url}</a></link`
                 } else {
                     document.getElementById("submit").innerText = "Error: Something went wrong."
                     document.getElementById("submit").setAttribute("aria-invalid","true")
