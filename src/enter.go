@@ -86,7 +86,6 @@ func main() {
 
 func clock() {
 	for range time.Tick(time.Minute * 1) {
-		log.Print("Looking for old secrets!")
 		dbClean()
 	}
 }
@@ -172,7 +171,7 @@ func service(w http.ResponseWriter, r *http.Request) {
 				Secret: new.Secret,
 			}
 			if new.Type != "string" {
-				data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Secret))
+				data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Code2))
 				if err != nil {
 					w.WriteHeader(400)
 				} else {
@@ -185,48 +184,41 @@ func service(w http.ResponseWriter, r *http.Request) {
 		}
 	case http.MethodPost:
 		r.ParseMultipartForm(32 << 20)
-		lint, _ := strconv.Atoi(r.Form.Get("life"))
-		var hid, dow bool
-		if r.Form.Get("hidden") == "on" {
-			hid = true
-		}
-		if r.Form.Get("download") == "on" {
-			dow = true
-		}
 		new := Secret{
 			Secret:   r.Form.Get("secret"),
-			Code:     uuid.New().String(),
-			Code2:    uuid.New().String(),
+			Code:     strings.Join(strings.Split(uuid.New().String(), "-"), ""),
+			Code2:    strings.Join(strings.Split(uuid.New().String(), "-"), ""),
 			Token:    r.Form.Get("token"),
 			Type:     r.Form.Get("type"),
-			Hidden:   hid,
-			Download: dow,
-			Life:     lint,
+			Hidden:   r.Form.Get("hidden") == "on",
+			Download: r.Form.Get("download") == "on",
 		}
-		f, h, err := r.FormFile("file")
-		if err != nil {
-			log.Print(err)
-		} else {
-			defer f.Close()
-			new.Secret = h.Filename
-			err = os.Mkdir(path.Join(ownPath, "blobs", new.Code), 0700)
+		new.Life, _ = strconv.Atoi(r.Form.Get("life"))
+		if new.Type != "string" {
+			f, _, err := r.FormFile("file")
 			if err != nil {
 				log.Print(err)
-			}
-			file, err := os.OpenFile(path.Join(ownPath, "blobs", new.Code, h.Filename), os.O_WRONLY|os.O_CREATE, 0700)
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			defer file.Close()
-			_, err = io.Copy(file, f)
-			if err != nil {
-				log.Print(err)
-				return
+			} else {
+				defer f.Close()
+				err = os.Mkdir(path.Join(ownPath, "blobs", new.Code), 0700)
+				if err != nil {
+					log.Print(err)
+				}
+				file, err := os.OpenFile(path.Join(ownPath, "blobs", new.Code, new.Code2), os.O_WRONLY|os.O_CREATE, 0700)
+				if err != nil {
+					log.Print(err)
+					return
+				}
+				defer file.Close()
+				_, err = io.Copy(file, f)
+				if err != nil {
+					log.Print(err)
+					return
+				}
 			}
 		}
 		new.Expiry = time.Now().Local().Add(time.Hour * time.Duration(new.Life)).UnixMilli()
-		if !recaptcha(new.Token, "") || apipost(r.Header.Get("X-Api-Key")) {
+		if !recaptcha(new.Token, "") || !(r.Header.Get("X-Api-Key") == config.Server.ApiKey) {
 			log.Print("Failed reCaptcha or api key check!")
 			return
 		}
@@ -256,13 +248,5 @@ func serve(w http.ResponseWriter, r *http.Request) {
 	} else {
 		dp := path.Join(wp, r.RequestURI)
 		http.ServeFile(w, r, dp)
-	}
-}
-
-func apipost(remotekey string) bool {
-	if remotekey == config.Server.PostKey {
-		return true
-	} else {
-		return false
 	}
 }

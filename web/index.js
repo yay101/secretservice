@@ -24,7 +24,8 @@ app = {
     start(){
         app.animation();
         app.type({value:document.getElementById("type").value});
-        if(app.iphonecheck){
+        console.log(app.iphonecheck())
+        if(app.iphonecheck == true){
             for(opt of document.getElementsByTagName("option")){
                 if(["audio","video"].includes(opt.value)){
                     opt.setAttribute("disabled","true");
@@ -40,11 +41,7 @@ app = {
         }
         switch(type.value){
             case "string":
-                textinput = document.createElement("input");
-                textinput.type = "text";
-                textinput.name = "secret"
-                textinput.placeholder = "Tell me your secret"
-                app.form.appendChild(textinput);
+                app.form.innerHTML += `<textarea style="min-height: 3rem;" name="secret" placeholder="Tell me your secret"></textarea>`
             break;
             case "binary":
                 app.form.innerHTML = `<input type="file" id="file" name="file">`;
@@ -113,7 +110,7 @@ app = {
                         return navigator.mediaDevices.getUserMedia({ audio: true, video: true})
                         .then(stream => {
                             this.streamBeingCaptured = stream;
-                            this.mediaRecorder = new MediaRecorder(stream, options);
+                            this.mediaRecorder = new MediaRecorder(stream);
                             this.mediaBlobs = [];
                             this.mediaRecorder.addEventListener("dataavailable", event => {
                                 this.mediaBlobs.push(event.data);

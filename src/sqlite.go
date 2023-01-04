@@ -7,17 +7,17 @@ import (
 	"path"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/CovenantSQL/go-sqlite3-encrypt"
 )
 
 func dbinit() {
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database))
+	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in creating db")
 		return
 	} else {
 		log.Println("Successfully connected to db!")
-		os.Chmod(path.Join(ownPath, config.Database), 0700)
+		os.Chmod(path.Join(ownPath, config.Database.Name), 0700)
 	}
 	defer db.Close()
 	//prepare secrets table
@@ -33,7 +33,7 @@ func dbinit() {
 func (s *Secret) Add() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database))
+	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in connecting db")
 		return false
@@ -51,7 +51,7 @@ func (s *Secret) Add() bool {
 }
 
 func (s *Secret) Get() bool {
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database))
+	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in connecting db")
 		return false
@@ -69,7 +69,7 @@ func (s *Secret) Get() bool {
 func (s *Secret) Delete() {
 	mu.Lock()
 	defer mu.Unlock()
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database))
+	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in connecting db")
 		return
@@ -90,7 +90,7 @@ func (s *Secret) Delete() {
 
 func dbClean() {
 	mu.Lock()
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database))
+	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Print(err)
 		log.Println("Error in connecting db")

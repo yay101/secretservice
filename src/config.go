@@ -7,40 +7,69 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v2"
 )
 
 type Config struct {
-	Server   Server    `json:"server"`
-	Database string    `json:"database"`
-	Captcha  Recaptcha `json:"captcha"`
+	Server   ServerSettings   `json:"server"`
+	Database DatabaseSettings `json:"database"`
+	Captcha  Recaptcha        `json:"captcha"`
 }
 
-type Server struct {
-	Name    string `json:"name"`
-	Port    int    `json:"port"`
-	Domain  string `json:"domain"`
-	GetKey  string `json:"getkey"`
-	PostKey string `json:"postkey"`
+type ServerSettings struct {
+	Name   string `json:"name"`
+	Port   int    `json:"port"`
+	Domain string `json:"domain"`
+	ApiKey string `json:"apikey"`
+}
+
+type DatabaseSettings struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
 }
 
 func (c *Config) Init() {
 	c = &Config{
-		Server: Server{
-			Name:    serverName,
-			Port:    3001,
-			Domain:  "secretservice.au",
-			GetKey:  uuid.New().String(),
-			PostKey: uuid.New().String(),
+		Server: ServerSettings{
+			Name:   serverName,
+			Port:   3001,
+			Domain: "secretservice.au",
+			ApiKey: strings.Join(strings.Split(uuid.New().String(), "-"), ""),
 		},
-		Database: "secrets.db",
+		Database: DatabaseSettings{
+			Name: "secrets.db",
+			Key:  strings.Join(strings.Split(uuid.New().String(), "-"), ""),
+		},
 	}
 	c.Save()
 }
 
 func (c *Config) Load() {
+	var env bool
+	if c.Server.Name, env = os.LookupEnv("server_name"); env {
+		log.Print("Found environmental variable.")
+		port, err := strconv.Atoi(os.Getenv("server_port"))
+		if err != nil {
+			log.Print("Error getting port from env: " + err.Error())
+		}
+		c = &Config{
+			Server: ServerSettings{
+				Name:   os.Getenv("server_name"),
+				Port:   port,
+				Domain: os.Getenv("server_domain"),
+				ApiKey: os.Getenv("server_apikey"),
+			},
+			Database: DatabaseSettings{
+				Name: os.Getenv("database_name"),
+				Key:  os.Getenv("database_key"),
+			},
+		}
+		return
+	}
 	trypath := []string{path.Join("/etc/", serverName, serverName) + ".yaml", path.Join(ownPath, serverName) + ".yaml"}
 	for i, location := range trypath {
 		yamlFile, err := os.Open(location)
