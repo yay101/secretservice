@@ -57,19 +57,5 @@
             </div>
         </form>
         <foot><a href="https://github.com/yay101/secretservice">Github</a></foot>
-        <script>
-            if(typeof grecaptcha === 'undefined') {
-              grecaptcha = {};
-            }
-            grecaptcha.ready = function(cb){
-              if(typeof grecaptcha === 'undefined') {
-                const c = '___grecaptcha_cfg';
-                window[c] = window[c] || {};
-                (window[c]['fns'] = window[c]['fns']||[]).push(cb);
-              } else {
-                cb();
-              }
-            }
-          </script>          
     </body>
 </html>

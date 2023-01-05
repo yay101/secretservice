@@ -3,6 +3,7 @@ app = {
     titleText: "SECRET SERVICE",
     form: document.getElementById("form"),
     lastlink: null,
+    submitbtn: document.getElementById("submit"),
     iphonecheck(){
         return ['iPad Simulator','iPhone Simulator','iPod Simulator','iPad','iPhone','iPod'].includes(navigator.platform) || (navigator.userAgent.includes("Mac") && "ontouchend" in document)
     },
@@ -11,13 +12,13 @@ app = {
             try{
                 navigator.clipboard.writeText(app.lastlink)
                 document.getElementById("cbimg").src="/img/clipboard2-check.svg"
-                document.getElementById("submit").innerText = "Success: Link copied to clipboard!"
+                app.submitbtn.innerText = "Success: Link copied to clipboard!"
                 setTimeout(()=>{
                     document.getElementById("cbimg").src="/img/clipboard2.svg"
-                    document.getElementById("submit").innerText = "Get Another Link"
+                    app.submitbtn.innerText = "Get Another Link"
                 },3000)
             } catch {
-                document.getElementById("submit").innerText = "Warning: Could not copy to clipboard! Click >"
+                app.submitbtn.innerText = "Warning: Could not copy to clipboard! Click >"
             }
         }
     },
@@ -147,7 +148,7 @@ app = {
         }
     },
     send(){
-        document.getElementById("submit").setAttribute("aria-busy","true")
+        app.submitbtn.setAttribute("aria-busy","true")
         var data = new FormData(document.getElementById("form-parent"))
         data.append("life",parseInt(document.getElementById("life").value))
         data.append("type",document.getElementById("type").value)
@@ -163,15 +164,15 @@ app = {
             })
             .then(response => response.json())
             .then(json => {
-                document.getElementById("submit").setAttribute("aria-busy","false")
+                app.submitbtn.setAttribute("aria-busy","false")
                 if(json.state){
                     app.lastlink = json.url;
                     app.toclipboard()
                 } else {
-                    document.getElementById("submit").innerText = "Error: Something went wrong."
-                    document.getElementById("submit").setAttribute("aria-invalid","true")
+                    app.submitbtn.innerText = "Error: Something went wrong."
+                    app.submitbtn.setAttribute("aria-invalid","true")
                 }
-                setTimeout(()=>{document.getElementById("submit").innerText = "Get Link";document.getElementById("submit").removeAttribute("aria-invalid")},3000)
+                setTimeout(()=>{app.submitbtn.innerText = "Get Link";app.submitbtn.removeAttribute("aria-invalid")},3000)
                 document.getElementById("form-parent").reset()
                 console.log(json)
             })

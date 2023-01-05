@@ -67,6 +67,12 @@ func (c *Config) Load() {
 				Name: os.Getenv("database_name"),
 				Key:  os.Getenv("database_key"),
 			},
+			Captcha: Recaptcha{
+				Enabled:   false,
+				SiteKey:   "",
+				SecretKey: "",
+				Score:     0.0,
+			},
 		}
 		return
 	}
