@@ -98,7 +98,7 @@ func blob(w http.ResponseWriter, r *http.Request) {
 		Code2: codes[3],
 	}
 	if new.Get() {
-		data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Secret))
+		data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Code2))
 		if err != nil {
 			log.Print("error getting file")
 			w.WriteHeader(400)
