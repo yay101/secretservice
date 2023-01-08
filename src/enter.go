@@ -131,15 +131,13 @@ func secret(w http.ResponseWriter, r *http.Request) {
 			}
 			tmpl.Execute(w, new)
 			return
-		} else {
-			rpath, err := url.JoinPath("https://", config.Server.Domain)
-			if err != nil {
-				log.Print(err)
-			}
-			http.Redirect(w, r, rpath, http.StatusFound)
-			return
 		}
 	}
+	rpath, err := url.JoinPath("https://", config.Server.Domain)
+	if err != nil {
+		log.Print(err)
+	}
+	http.Redirect(w, r, rpath, http.StatusFound)
 }
 
 func service(w http.ResponseWriter, r *http.Request) {
