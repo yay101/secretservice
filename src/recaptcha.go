@@ -48,7 +48,6 @@ func recaptcha(response string, remoteip string) bool {
 	Response := VerifyResponse{}
 	json.Unmarshal(body, &Response)
 	if Response.Score > config.Captcha.Score {
-		log.Print("pass")
 		return true
 	} else {
 		return false

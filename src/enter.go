@@ -145,28 +145,25 @@ func secret(w http.ResponseWriter, r *http.Request) {
 func service(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		strip := strings.Replace(r.RequestURI, "?show=true", "", 1)
-		codes := strings.Split(strip, "/")
-		new := Secret{
-			Code:  codes[2],
-			Code2: codes[3],
-		}
-		if new.Get() {
-			res := Request{
-				Type:   new.Type,
-				Secret: new.Secret,
-			}
-			if new.Type != "string" {
-				data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Code2))
-				if err != nil {
-					w.WriteHeader(400)
-				} else {
-					res.Blob = data
+		new := Secret{}
+		if new.toCode(r.RequestURI) {
+			if new.Get() {
+				res := Request{
+					Type:   new.Type,
+					Secret: new.Secret,
 				}
+				if new.Type != "string" {
+					data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Code2))
+					if err != nil {
+						w.WriteHeader(400)
+					} else {
+						res.Blob = data
+					}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(res)
+				new.Delete()
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(res)
-			new.Delete()
 		}
 	case http.MethodPost:
 		r.ParseMultipartForm(10000000)
