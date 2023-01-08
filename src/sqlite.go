@@ -92,8 +92,7 @@ func dbClean() {
 	mu.Lock()
 	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
-		log.Print(err)
-		log.Println("Error in connecting db")
+		log.Println("Error in connecting db: " + err.Error())
 		return
 	}
 	rows, err := db.Query("SELECT * FROM secrets WHERE expiry < ?", time.Now().Local().UnixMilli())

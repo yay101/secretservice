@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"html/template"
 	"io"
@@ -50,6 +51,8 @@ var (
 	serverName     = "secretservice"
 	mu             sync.Mutex
 	config         Config
+	//go:embed web
+	webfs embed.FS
 )
 
 func init() {
@@ -91,33 +94,24 @@ func clock() {
 }
 
 func blob(w http.ResponseWriter, r *http.Request) {
-	strip := strings.Replace(r.RequestURI, "?show=true", "", 1)
-	codes := strings.Split(strip, "/")
-	new := Secret{
-		Code:  codes[2],
-		Code2: codes[3],
-	}
-	if new.Get() {
-		data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Code2))
-		if err != nil {
-			log.Print("error getting file")
-			w.WriteHeader(400)
-		} else {
-			w.Write(data)
-			new.Delete()
+	var new Secret
+	if new.toCode(r.RequestURI) {
+		if new.Get() {
+			data, err := os.ReadFile(path.Join(ownPath, "blobs", new.Code, new.Code2))
+			if err != nil {
+				log.Print("Error getting file: " + err.Error())
+				w.WriteHeader(400)
+			} else {
+				w.Write(data)
+				new.Delete()
+			}
 		}
 	}
 }
 
 func secret(w http.ResponseWriter, r *http.Request) {
-	tp := path.Join(ownPath, "/web", "/templates")
-	strip := strings.Split(r.RequestURI, "?")[0]
-	codes := strings.Split(strip, "/")
-	if len(codes) == 4 {
-		new := Secret{
-			Code:  codes[2],
-			Code2: codes[3],
-		}
+	var new Secret
+	if new.toCode(r.RequestURI) {
 		if new.Get() {
 			agent := r.Header.Get("User-Agent")
 			if strings.Contains(agent, "facebook") {
@@ -128,22 +122,14 @@ func secret(w http.ResponseWriter, r *http.Request) {
 			if new.Hidden {
 				r.ParseForm()
 				if !r.Form.Has("show") {
-					sp := path.Join(tp, "show.html")
-					http.ServeFile(w, r, sp)
-					return
+					new.Type = "show"
 				}
 			}
-			var tmpl *template.Template
-			switch new.Type {
-			case "string":
-				tmpl = template.Must(template.ParseFiles(path.Join(tp, "string.html")))
-				tmpl.Execute(w, new)
-				new.Delete()
-			default:
-				dp := path.Join(tp, new.Type+".html")
-				log.Print(dp)
-				http.ServeFile(w, r, dp)
+			tmpl, err := template.ParseFS(webfs, "web/templates/"+new.Type+".html")
+			if err != nil {
+				log.Print(err)
 			}
+			tmpl.Execute(w, new)
 			return
 		} else {
 			rpath, err := url.JoinPath("https://", config.Server.Domain)
@@ -183,7 +169,7 @@ func service(w http.ResponseWriter, r *http.Request) {
 			new.Delete()
 		}
 	case http.MethodPost:
-		r.ParseMultipartForm(32 << 20)
+		r.ParseMultipartForm(10000000)
 		new := Secret{
 			Secret:   r.Form.Get("secret"),
 			Code:     strings.Join(strings.Split(uuid.New().String(), "-"), ""),
@@ -241,12 +227,39 @@ func service(w http.ResponseWriter, r *http.Request) {
 }
 
 func serve(w http.ResponseWriter, r *http.Request) {
-	wp := path.Join(ownPath, "/web")
 	if r.RequestURI == "/" {
-		tmpl := template.Must(template.ParseFiles(wp + "/index.html"))
+		tmpl, err := template.ParseFS(webfs, "web/index.html")
+		if err != nil {
+			log.Print(err)
+		}
 		tmpl.Execute(w, config.Captcha)
 	} else {
-		dp := path.Join(wp, r.RequestURI)
-		http.ServeFile(w, r, dp)
+		filebytes, err := webfs.ReadFile("web" + r.RequestURI)
+		if err != nil {
+			log.Print(err)
+		}
+		file := strings.Split(r.RequestURI, ".")
+		switch file[len(file)-1] {
+		case "html":
+			w.Header().Add("Content-Type", "text/html; charset=utf-8")
+		case "css":
+			w.Header().Add("Content-Type", "text/css; charset=utf-8")
+		case "js":
+			w.Header().Add("Content-Type", "text/javascript; charset=utf-8")
+		case "svg":
+			w.Header().Add("Content-Type", "image/svg+xml; charset=utf-8")
+		}
+		w.Write(filebytes)
 	}
+}
+
+func (n *Secret) toCode(u string) bool {
+	strip := strings.Split(u, "?")[0]
+	codes := strings.Split(strip, "/")
+	if len(codes) == 4 {
+		n.Code = codes[2]
+		n.Code2 = codes[3]
+		return true
+	}
+	return false
 }

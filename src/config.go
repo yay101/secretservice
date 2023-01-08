@@ -56,6 +56,14 @@ func (c *Config) Load() {
 		if err != nil {
 			log.Print("Error getting port from env: " + err.Error())
 		}
+		captcha, err := strconv.ParseBool(os.Getenv("captcha_enabled"))
+		if err != nil {
+			log.Print("Error getting port from env: " + err.Error())
+		}
+		capscore, err := strconv.ParseFloat(os.Getenv("captcha_score"), 64)
+		if err != nil {
+			log.Print("Error getting port from env: " + err.Error())
+		}
 		c = &Config{
 			Server: ServerSettings{
 				Name:   os.Getenv("server_name"),
@@ -68,10 +76,10 @@ func (c *Config) Load() {
 				Key:  os.Getenv("database_key"),
 			},
 			Captcha: Recaptcha{
-				Enabled:   false,
-				SiteKey:   "",
-				SecretKey: "",
-				Score:     0.0,
+				Enabled:   captcha,
+				SiteKey:   os.Getenv("captcha_sitekey"),
+				SecretKey: os.Getenv("captcha_secretkey"),
+				Score:     capscore,
 			},
 		}
 		return
