@@ -19,7 +19,7 @@ Use the following environmental variables:
 
 This service was made over 2 days for fun and is getting the rough edges worked on to get it to version 1.
 To Do:
-- [ ] Embed web folder
+- [X] Embed web folder
 - [ ] Finalize CSS
 - [ ] File encryption
 - [X] DB encryption
