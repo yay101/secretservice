@@ -4,7 +4,7 @@ Then this is the service for you.
 
 You can self host this service behind whatever reverse proxy you prefer.
 To build install go on your build system and run:
-# go build -ldflags="-s -w"
+go build -ldflags="-s -w"
 
 Run once to generate the config in the same folder as application.
 Or
