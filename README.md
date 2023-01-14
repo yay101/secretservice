@@ -3,6 +3,9 @@ Ever wanted to share a file or information via a link that only works once and d
 Then this is the service for you.
 
 You can self host this service behind whatever reverse proxy you prefer.
+To build install go on your build system and run:
+go build -ldflags="-s -w"
+
 Run once to generate the config in the same folder as application.
 Or
 Use the following environmental variables:
