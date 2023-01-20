@@ -176,7 +176,8 @@ func service(w http.ResponseWriter, r *http.Request) {
 		}
 		new.Life, _ = strconv.Atoi(r.Form.Get("life"))
 		if new.Type != "string" {
-			f, _, err := r.FormFile("file")
+			f, h, err := r.FormFile("file")
+			new.Secret = h.Filename
 			if err != nil {
 				log.Print(err)
 			} else {

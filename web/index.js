@@ -7,20 +7,30 @@ app = {
     iphonecheck(){
         return ['iPad Simulator','iPhone Simulator','iPod Simulator','iPad','iPhone','iPod'].includes(navigator.platform) || (navigator.userAgent.includes("Mac") && "ontouchend" in document)
     },
+    newlink(url){
+        document.getElementById("links").innerHTML += `<linkitem><span>${url}</span><button type="button" onclick="app.oldclipboard(this)"><img style="height:1.5rem;" src="/img/clipboard2.svg" class="icon"></button></linkitem>`
+    },
     toclipboard(){
         if(app.lastlink){
-            try{
-                navigator.clipboard.writeText(app.lastlink)
+            app.newlink(app.lastlink)
+            navigator.clipboard.writeText(app.lastlink)
+            .then(result => {
                 document.getElementById("cbimg").src="/img/clipboard2-check.svg"
                 app.submitbtn.innerText = "Success: Link copied to clipboard!"
-                setTimeout(()=>{
-                    document.getElementById("cbimg").src="/img/clipboard2.svg"
-                    app.submitbtn.innerText = "Get Another Link"
-                },3000)
-            } catch {
-                app.submitbtn.innerText = "Warning: Could not copy to clipboard! Click >"
-            }
+            })
+            .catch(err => {app.submitbtn.innerText = "Grab the link below!";console.log(err)})
+            setTimeout(()=>{
+                document.getElementById("cbimg").src="/img/clipboard2.svg"
+                app.submitbtn.innerText = "Get Another Link"
+            },3000)
         }
+    },
+    oldclipboard(e){
+        navigator.clipboard.writeText(e.parentNode.innerText)
+        e.firstChild.src="/img/clipboard2-check.svg"
+        setTimeout(()=>{
+            e.firstChild.src="/img/clipboard2.svg"
+        },3000)
     },
     start(){
         app.animation();

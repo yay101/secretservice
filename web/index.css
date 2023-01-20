@@ -42,6 +42,26 @@ links {
   flex-direction: column-reverse;
 }
 
+linkitem {
+  display: flex;
+  flex-direction: row;
+  margin-top:1rem;
+}
+
+linkitem span {
+  overflow:hidden;
+  white-space:nowrap;
+  margin-right:1rem;
+  margin-top:auto;
+  margin-bottom:auto;
+}
+
+linkitem button {
+  width:fit-content;
+  margin-left:auto;
+  margin-bottom:0;
+}
+
 .icon {
   min-width:100%;
 }
