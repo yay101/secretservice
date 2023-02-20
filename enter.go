@@ -172,13 +172,15 @@ func service(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		r.ParseMultipartForm(10000000)
 		new := Secret{
-			Secret:   r.Form.Get("secret"),
-			Code:     strings.Join(strings.Split(uuid.New().String(), "-"), ""),
-			Code2:    strings.Join(strings.Split(uuid.New().String(), "-"), ""),
-			Token:    r.Form.Get("token"),
-			Type:     r.Form.Get("type"),
-			Hidden:   r.Form.Get("hidden") == "on",
-			Download: r.Form.Get("download") == "on",
+			Secret:    r.Form.Get("secret"),
+			ShortCode: r.Form.Get("shortcode"),
+			Code:      strings.Join(strings.Split(uuid.New().String(), "-"), ""),
+			Code2:     strings.Join(strings.Split(uuid.New().String(), "-"), ""),
+			Token:     r.Form.Get("token"),
+			Type:      r.Form.Get("type"),
+			Hidden:    r.Form.Get("hidden") == "on",
+			Download:  r.Form.Get("download") == "on",
+			Short:     r.Form.Get("short") == "on",
 		}
 		new.Life, _ = strconv.Atoi(r.Form.Get("life"))
 		if new.Type != "string" {
