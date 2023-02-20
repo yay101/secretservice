@@ -74,7 +74,7 @@ func init() {
 	//init the db
 	dbinit()
 	//compile the regex
-	smatch, _ = regexp.Compile("^/[a-zA-Z0-9]{6,}$")
+	smatch, _ = regexp.Compile("[a-zA-Z0-9]{6,}$")
 }
 
 func main() {
