@@ -146,6 +146,7 @@ app = {
         var data = new FormData(document.getElementById("form-parent"))
         data.append("life",parseInt(document.getElementById("life").value))
         data.append("type",document.getElementById("type").value)
+        data.append("shortcode",Math.random().toString(36).slice(-6))
         if(app.media.mediaBlob){
             data.append("file",app.media.mediaBlob, `recording.${app.media.mediaBlob.type}`)
         }

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,16 +21,18 @@ import (
 )
 
 type Secret struct {
-	Id       int64
-	Type     string `json:"type"`
-	Code     string
-	Code2    string
-	Secret   string `json:"secret"`
-	Download bool   `json:"download"`
-	Hidden   bool   `json:"hidden"`
-	Life     int    `json:"life"`
-	Token    string `json:"token"`
-	Expiry   int64
+	Id        int64
+	Type      string `json:"type"`
+	ShortCode string `json:"shortcode"`
+	Code      string
+	Code2     string
+	Secret    string `json:"secret"`
+	Download  bool   `json:"download"`
+	Hidden    bool   `json:"hidden"`
+	Short     bool   `json:"short"`
+	Life      int    `json:"life"`
+	Token     string `json:"token"`
+	Expiry    int64
 }
 
 type Response struct {
@@ -51,6 +54,7 @@ var (
 	serverName     = "secretservice"
 	mu             sync.Mutex
 	config         Config
+	smatch         *regexp.Regexp
 	//go:embed web
 	webfs embed.FS
 )
@@ -69,6 +73,8 @@ func init() {
 	config.Load()
 	//init the db
 	dbinit()
+	//compile the regex
+	smatch, _ = regexp.Compile("^/[a-zA-Z0-9]{6,}$")
 }
 
 func main() {
@@ -200,16 +206,22 @@ func service(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		new.Expiry = time.Now().Local().Add(time.Hour * time.Duration(new.Life)).UnixMilli()
-		if !recaptcha(new.Token, "") || !(r.Header.Get("X-Api-Key") == config.Server.ApiKey) {
+		if !(recaptcha(new.Token, "") || (r.Header.Get("X-Api-Key") == config.Server.ApiKey)) {
 			log.Print("Failed reCaptcha or api key check!")
+			w.WriteHeader(400)
 			return
 		}
 		res := Response{}
 		if new.Add() {
-			newurl, _ := url.JoinPath("https://", config.Server.Domain, "secret", new.Code, new.Code2)
+			var secreturl string
+			if new.Short {
+				secreturl, _ = url.JoinPath("https://", config.Server.Domain, new.ShortCode)
+			} else {
+				secreturl, _ = url.JoinPath("https://", config.Server.Domain, "secret", new.Code, new.Code2)
+			}
 			res = Response{
 				State: true,
-				Url:   newurl,
+				Url:   secreturl,
 			}
 		} else {
 			res = Response{
@@ -223,6 +235,16 @@ func service(w http.ResponseWriter, r *http.Request) {
 }
 
 func serve(w http.ResponseWriter, r *http.Request) {
+	if smatch.MatchString(r.RequestURI) {
+		secret := Secret{
+			ShortCode: smatch.FindString(r.RequestURI),
+		}
+		if !secret.Get() {
+			rurl, _ := url.JoinPath("https://", config.Server.Domain, "secret", secret.Code, secret.Code2)
+			http.Redirect(w, r, rurl, http.StatusFound)
+			return
+		}
+	}
 	if r.RequestURI == "/" {
 		tmpl, err := template.ParseFS(webfs, "web/index.html")
 		if err != nil {

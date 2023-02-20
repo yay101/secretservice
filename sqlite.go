@@ -21,7 +21,7 @@ func dbinit() {
 	}
 	defer db.Close()
 	//prepare secrets table
-	secretdb, err := db.Prepare("CREATE TABLE IF NOT EXISTS secrets (id INTEGER PRIMARY KEY, type TEXT, code TEXT, code2 TEXT, secret TEXT, download BOOL, hidden BOOL, life INTEGER, expiry INTEGER)")
+	secretdb, err := db.Prepare("CREATE TABLE IF NOT EXISTS secrets (id INTEGER PRIMARY KEY, type TEXT, shortcode TEXT, code TEXT, code2 TEXT, secret TEXT, download BOOL, hidden BOOL, short BOOL, life INTEGER, expiry INTEGER)")
 	if err != nil {
 		log.Println("Error in creating table")
 	} else {
@@ -39,7 +39,7 @@ func (s *Secret) Add() bool {
 		return false
 	}
 	defer db.Close()
-	res, err := db.Exec("INSERT INTO secrets (type, code, code2, secret, download, hidden, life, expiry) VALUES(?,?,?,?,?,?,?,?)", s.Type, s.Code, s.Code2, s.Secret, s.Download, s.Hidden, s.Life, s.Expiry)
+	res, err := db.Exec("INSERT INTO secrets (type, shortcode, code, code2, secret, download, hidden, short, life, expiry) VALUES(?,?,?,?,?,?,?,?,?,?)", s.Type, s.ShortCode, s.Code, s.Code2, s.Secret, s.Download, s.Hidden, s.Short, s.Life, s.Expiry)
 	if err != nil {
 		log.Print(err)
 		return false
@@ -51,14 +51,21 @@ func (s *Secret) Add() bool {
 }
 
 func (s *Secret) Get() bool {
+	mu.Lock()
+	defer mu.Unlock()
 	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in connecting db")
 		return false
 	}
 	defer db.Close()
-	row := db.QueryRow("SELECT * FROM secrets WHERE code=? AND code2=?", s.Code, s.Code2)
-	err = row.Scan(&s.Id, &s.Type, &s.Code, &s.Code2, &s.Secret, &s.Download, &s.Hidden, &s.Life, &s.Expiry)
+	var row *sql.Row
+	if s.ShortCode != "" {
+		row = db.QueryRow("SELECT * FROM secrets WHERE shortcode=? AND short=?", s.ShortCode, true)
+	} else {
+		row = db.QueryRow("SELECT * FROM secrets WHERE code=? AND code2=?", s.Code, s.Code2)
+	}
+	err = row.Scan(&s.Id, &s.Type, &s.ShortCode, &s.Code, &s.Code2, &s.Secret, &s.Download, &s.Hidden, &s.Short, &s.Life, &s.Expiry)
 	if err != nil {
 		log.Print(err)
 		return false
@@ -105,7 +112,7 @@ func dbClean() {
 	var oldSecrets Secrets
 	for rows.Next() {
 		var tmp Secret
-		err = rows.Scan(&tmp.Id, &tmp.Type, &tmp.Code, &tmp.Code2, &tmp.Secret, &tmp.Download, &tmp.Hidden, &tmp.Life, &tmp.Expiry)
+		err = rows.Scan(&tmp.Id, &tmp.Type, &tmp.ShortCode, &tmp.Code, &tmp.Code2, &tmp.Secret, &tmp.Download, &tmp.Hidden, &tmp.Short, &tmp.Life, &tmp.Expiry)
 		if err != nil {
 			log.Print(err)
 		} else {
