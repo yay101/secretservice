@@ -74,7 +74,7 @@ func init() {
 	//init the db
 	dbinit()
 	//compile the regex
-	smatch, _ = regexp.Compile("[a-zA-Z0-9]{6,}$")
+	smatch, _ = regexp.Compile("(/.*)?[a-zA-Z0-9]{6,}$")
 }
 
 func main() {
@@ -239,9 +239,9 @@ func service(w http.ResponseWriter, r *http.Request) {
 func serve(w http.ResponseWriter, r *http.Request) {
 	if smatch.MatchString(r.RequestURI) {
 		secret := Secret{
-			ShortCode: smatch.FindString(r.RequestURI),
+			ShortCode: strings.Replace(r.RequestURI, "/", "", 1),
 		}
-		if !secret.Get() {
+		if secret.Get() {
 			rurl, _ := url.JoinPath("https://", config.Server.Domain, "secret", secret.Code, secret.Code2)
 			http.Redirect(w, r, rurl, http.StatusFound)
 			return
