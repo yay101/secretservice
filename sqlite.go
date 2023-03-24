@@ -35,7 +35,7 @@ func (s *Secret) Add() bool {
 	defer mu.Unlock()
 	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
-		log.Println("Error in connecting db")
+		log.Println("Error opening db")
 		return false
 	}
 	defer db.Close()
@@ -64,6 +64,7 @@ func (s *Secret) Get() bool {
 		row = db.QueryRow("SELECT * FROM secrets WHERE shortcode=? AND short=?", s.ShortCode, true)
 	} else {
 		row = db.QueryRow("SELECT * FROM secrets WHERE code=? AND code2=?", s.Code, s.Code2)
+		s.Delete()
 	}
 	err = row.Scan(&s.Id, &s.Type, &s.ShortCode, &s.Code, &s.Code2, &s.Secret, &s.Download, &s.Hidden, &s.Short, &s.Life, &s.Expiry)
 	if err != nil {
