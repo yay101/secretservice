@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 
@@ -21,10 +20,16 @@ type Config struct {
 }
 
 type ServerSettings struct {
-	Name   string `json:"name"`
-	Port   int    `json:"port"`
-	Domain string `json:"domain"`
-	ApiKey string `json:"apikey"`
+	Name      string    `json:"name"`
+	Port      int       `json:"port"`
+	Domain    string    `json:"domain"`
+	ApiKey    string    `json:"apikey"`
+	Resources Resources `json:"resources"`
+}
+
+type Resources struct {
+	External bool   `json:"external"`
+	Path     string `json:"path"`
 }
 
 type DatabaseSettings struct {
@@ -35,7 +40,7 @@ type DatabaseSettings struct {
 func (c *Config) Init() {
 	c = &Config{
 		Server: ServerSettings{
-			Name:   serverName,
+			Name:   "SecretService",
 			Port:   3001,
 			Domain: "secretservice.au",
 			ApiKey: strings.Join(strings.Split(uuid.New().String(), "-"), ""),
@@ -58,11 +63,11 @@ func (c *Config) Load() {
 		}
 		captcha, err := strconv.ParseBool(os.Getenv("captcha_enabled"))
 		if err != nil {
-			log.Print("Error getting port from env: " + err.Error())
+			log.Print("Error getting captcha status from env: " + err.Error())
 		}
 		capscore, err := strconv.ParseFloat(os.Getenv("captcha_score"), 64)
 		if err != nil {
-			log.Print("Error getting port from env: " + err.Error())
+			log.Print("Error getting captcha score from env: " + err.Error())
 		}
 		c = &Config{
 			Server: ServerSettings{
@@ -83,21 +88,13 @@ func (c *Config) Load() {
 			},
 		}
 		return
-	}
-	trypath := []string{path.Join("/etc/", serverName, serverName) + ".yaml", path.Join(ownPath, serverName) + ".yaml"}
-	for i, location := range trypath {
-		yamlFile, err := os.Open(location)
+	} else {
+		yamlFile, err := os.Open("./config.yaml")
 		if err != nil {
 			log.Print(err)
-			if i == len(trypath)-1 {
-				log.Print("There are no configuration files. I will try and create one for you with the default settings here: " + location)
-				configLocation = location
-				config.Init()
-				break
-			}
-			continue
+			config.Init()
 		} else {
-			log.Print("Opened config: " + location)
+			log.Print("Opened config ./config.yaml")
 			defer yamlFile.Close()
 			byteValue, _ := io.ReadAll(yamlFile)
 			yaml.Unmarshal(byteValue, &c)
@@ -107,7 +104,7 @@ func (c *Config) Load() {
 
 func (c *Config) Save() {
 	yamlString, _ := yaml.Marshal(config)
-	err := os.WriteFile(configLocation, yamlString, 0600)
+	err := os.WriteFile("./config.yaml", yamlString, 0600)
 	if err != nil {
 		log.Print(err)
 	}

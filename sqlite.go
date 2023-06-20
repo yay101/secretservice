@@ -11,21 +11,21 @@ import (
 )
 
 func dbinit() {
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
+	db, err := sql.Open("sqlite3", path.Join("./", config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
-		log.Println("Error in creating db")
+		log.Fatal("Error in creating db")
 		return
 	} else {
-		log.Println("Successfully connected to db!")
-		os.Chmod(path.Join(ownPath, config.Database.Name), 0700)
+		log.Print("Successfully connected to db!")
+		os.Chmod(path.Join("./", config.Database.Name), 0700)
 	}
 	defer db.Close()
 	//prepare secrets table
-	secretdb, err := db.Prepare("CREATE TABLE IF NOT EXISTS secrets (id INTEGER PRIMARY KEY, type TEXT, shortcode TEXT, code TEXT, code2 TEXT, secret TEXT, download BOOL, hidden BOOL, short BOOL, life INTEGER, expiry INTEGER)")
+	secretdb, err := db.Prepare("CREATE TABLE IF NOT EXISTS secrets (id INTEGER PRIMARY KEY, type TEXT, code TEXT, shortcode TEXT, secret TEXT, download BOOL, hidden BOOL, short BOOL, life INTEGER, key TEXT, blob BLOB, expiry DATETIME)")
 	if err != nil {
-		log.Println("Error in creating table")
+		log.Fatal("Error in creating table")
 	} else {
-		log.Println("Successfully created table secrets!")
+		log.Print("Successfully created table secrets!")
 	}
 	secretdb.Exec()
 }
@@ -33,13 +33,13 @@ func dbinit() {
 func (s *Secret) Add() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
+	db, err := sql.Open("sqlite3", path.Join("./", config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
-		log.Println("Error opening db")
+		log.Print("Error opening db")
 		return false
 	}
 	defer db.Close()
-	res, err := db.Exec("INSERT INTO secrets (type, shortcode, code, code2, secret, download, hidden, short, life, expiry) VALUES(?,?,?,?,?,?,?,?,?,?)", s.Type, s.ShortCode, s.Code, s.Code2, s.Secret, s.Download, s.Hidden, s.Short, s.Life, s.Expiry)
+	res, err := db.Exec("INSERT INTO secrets (type, code, shortcode, secret, download, hidden, short, life, key, blob, expiry) VALUES(?,?,?,?,?,?,?,?,?,?,?)", s.Type, s.Code, s.ShortCode, s.Secret, s.Download, s.Hidden, s.Short, s.Life, s.Key, s.Blob, s.Expiry)
 	if err != nil {
 		log.Print(err)
 		return false
@@ -53,7 +53,7 @@ func (s *Secret) Add() bool {
 func (s *Secret) Get() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
+	db, err := sql.Open("sqlite3", path.Join("./", config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in connecting db")
 		return false
@@ -63,10 +63,10 @@ func (s *Secret) Get() bool {
 	if s.ShortCode != "" {
 		row = db.QueryRow("SELECT * FROM secrets WHERE shortcode=? AND short=?", s.ShortCode, true)
 	} else {
-		row = db.QueryRow("SELECT * FROM secrets WHERE code=? AND code2=?", s.Code, s.Code2)
+		row = db.QueryRow("SELECT * FROM secrets WHERE code=?", s.Code)
 		s.Delete()
 	}
-	err = row.Scan(&s.Id, &s.Type, &s.ShortCode, &s.Code, &s.Code2, &s.Secret, &s.Download, &s.Hidden, &s.Short, &s.Life, &s.Expiry)
+	err = row.Scan(&s.Id, &s.Type, &s.ShortCode, &s.Code, &s.Secret, &s.Download, &s.Hidden, &s.Short, &s.Life, &s.Expiry)
 	if err != nil {
 		log.Print(err)
 		return false
@@ -77,7 +77,7 @@ func (s *Secret) Get() bool {
 func (s *Secret) Delete() {
 	mu.Lock()
 	defer mu.Unlock()
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
+	db, err := sql.Open("sqlite3", path.Join("./", config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in connecting db")
 		return
@@ -88,22 +88,16 @@ func (s *Secret) Delete() {
 		log.Print(res)
 		log.Print(err)
 	}
-	if s.Type != "string" {
-		err := os.RemoveAll(path.Join(ownPath, "blobs", s.Code))
-		if err != nil {
-			log.Print()
-		}
-	}
 }
 
 func dbClean() {
 	mu.Lock()
-	db, err := sql.Open("sqlite3", path.Join(ownPath, config.Database.Name)+"?_crypto_key="+config.Database.Key)
+	db, err := sql.Open("sqlite3", path.Join("./", config.Database.Name)+"?_crypto_key="+config.Database.Key)
 	if err != nil {
 		log.Println("Error in connecting db: " + err.Error())
 		return
 	}
-	rows, err := db.Query("SELECT * FROM secrets WHERE expiry < ?", time.Now().Local().UnixMilli())
+	rows, err := db.Query("SELECT * FROM secrets WHERE expiry < ?", time.Now().Local())
 	db.Close()
 	mu.Unlock()
 	if err != nil {
@@ -113,7 +107,7 @@ func dbClean() {
 	var oldSecrets Secrets
 	for rows.Next() {
 		var tmp Secret
-		err = rows.Scan(&tmp.Id, &tmp.Type, &tmp.ShortCode, &tmp.Code, &tmp.Code2, &tmp.Secret, &tmp.Download, &tmp.Hidden, &tmp.Short, &tmp.Life, &tmp.Expiry)
+		err = rows.Scan(&tmp.Id, &tmp.Type, &tmp.Code, &tmp.ShortCode, &tmp.Secret, &tmp.Download, &tmp.Hidden, &tmp.Short, &tmp.Life, &tmp.Key, &tmp.Blob, &tmp.Expiry)
 		if err != nil {
 			log.Print(err)
 		} else {

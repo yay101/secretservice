@@ -144,12 +144,17 @@ app = {
     send(){
         app.submitbtn.setAttribute("aria-busy","true")
         var data = new FormData(document.getElementById("form-parent"))
+        if(data.get("file")){
+            console.log(data.get("file"))
+        }
         data.append("life",parseInt(document.getElementById("life").value))
         data.append("type",document.getElementById("type").value)
         data.append("shortcode",Math.random().toString(36).slice(-6))
         if(app.media.mediaBlob){
+            var wordArray = CryptoJS.lib.WordArray.create(e.target.result);
             data.append("file",app.media.mediaBlob, `recording.${app.media.mediaBlob.type}`)
         }
+        console.log(data)
         grecaptcha.execute(document.querySelector("html").dataset.recaptcha)
         .then(token => {
             data.append("token",token)
