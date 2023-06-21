@@ -141,26 +141,30 @@ app = {
             this.streamBeingCaptured = null;
         }
     },
+    collect(){
+        const data = Object.fromEntries(new FormData(document.getElementById("form-parent")));
+        for(const key of Object.keys(data)){
+            if(data[key] == "on"){
+                data[key] = true
+            }
+        }
+        data.type = document.getElementById("type").value
+        data.life = Number(document.getElementById("life").value)
+        console.log(data);
+        return data
+    },
     send(){
         app.submitbtn.setAttribute("aria-busy","true")
-        var data = new FormData(document.getElementById("form-parent"))
-        if(data.get("file")){
-            console.log(data.get("file"))
-        }
-        data.append("life",parseInt(document.getElementById("life").value))
-        data.append("type",document.getElementById("type").value)
-        data.append("shortcode",Math.random().toString(36).slice(-6))
-        if(app.media.mediaBlob){
-            var wordArray = CryptoJS.lib.WordArray.create(e.target.result);
-            data.append("file",app.media.mediaBlob, `recording.${app.media.mediaBlob.type}`)
-        }
-        console.log(data)
+        const data = this.collect()
         grecaptcha.execute(document.querySelector("html").dataset.recaptcha)
         .then(token => {
-            data.append("token",token)
             fetch("/service",{
                 method:"POST",
-                body: data,
+                headers: {
+                    "X-Captcha-Token": token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data),
             })
             .then(response => response.json())
             .then(json => {

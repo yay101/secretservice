@@ -1,7 +1,7 @@
 server:
   name: "secretservice"
   port: 3001
-  domain: "secretservice.au"
+  domain: "secretservice.davewales.au"
   getkey: "45h4h45h4h45h45h"
   postkey: "5h4t34t34t45y434t"
 database: 

@@ -1,18 +1,17 @@
 package main
 
 import (
-	"crypto/rand"
 	"embed"
 	"encoding/json"
 	"html/template"
 	"log"
-	"math/big"
+	"math/rand"
+	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -45,7 +44,6 @@ type Request struct {
 type Secrets []Secret
 
 var (
-	mu     sync.Mutex
 	config Config
 	smatch *regexp.Regexp
 	lmatch *regexp.Regexp
@@ -59,8 +57,8 @@ func init() {
 	//init the db
 	dbinit()
 	//compile the regex
-	smatch, _ = regexp.Compile("(?:/)[a-zA-Z0-9]{6,6}")
-	lmatch, _ = regexp.Compile("(?:/)[a-zA-Z0-9]{256,256}")
+	smatch, _ = regexp.Compile("(?:/)([a-zA-Z0-9]{6,6}$)")
+	lmatch, _ = regexp.Compile("(?:/)([a-zA-Z0-9]{256,256})")
 }
 
 func main() {
@@ -69,7 +67,6 @@ func main() {
 	//init the server
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(serve))
-	mux.Handle("/secret/", http.HandlerFunc(secret))
 	mux.Handle("/blob/", http.HandlerFunc(blob))
 	mux.Handle("/service", http.HandlerFunc(service))
 	//start the server!
@@ -80,16 +77,12 @@ func main() {
 }
 
 func random(length int) string {
-	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
-	ret := make([]byte, length)
-	for i := 0; i < length; i++ {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
-		if err != nil {
-			return ""
-		}
-		ret = append(ret, letters[num.Int64()])
+	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
 	}
-	return string(ret)
+	return string(b)
 }
 
 func clock() {
@@ -104,36 +97,9 @@ func blob(w http.ResponseWriter, r *http.Request) {
 	if new.Get() {
 		w.Write(new.Blob)
 		new.Delete()
+	} else {
+		w.WriteHeader(404)
 	}
-}
-
-func secret(w http.ResponseWriter, r *http.Request) {
-	var new Secret
-	new.Code = lmatch.FindStringSubmatch(r.RequestURI)[1]
-	if new.Get() {
-		agent := r.Header.Get("User-Agent")
-		if strings.Contains(agent, "facebook") {
-			w.WriteHeader(403)
-			return
-		}
-		if new.Hidden {
-			r.ParseForm()
-			if !r.Form.Has("show") {
-				new.Type = "show"
-			}
-		}
-		tmpl, err := template.ParseFS(webfs, "web/templates/"+new.Type+".html")
-		if err != nil {
-			log.Print(err)
-		}
-		tmpl.Execute(w, new)
-		return
-	}
-	rpath, err := url.JoinPath("https://", config.Server.Domain)
-	if err != nil {
-		log.Print(err)
-	}
-	http.Redirect(w, r, rpath, http.StatusFound)
 }
 
 func service(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +111,6 @@ func service(w http.ResponseWriter, r *http.Request) {
 			res := Request{
 				Type:   new.Type,
 				Secret: new.Secret,
-				Blob:   new.Blob,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(res)
@@ -168,7 +133,6 @@ func service(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(403)
 			return
 		}
-
 		res := Response{}
 		if new.Add() {
 			var secreturl string
@@ -196,24 +160,50 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		secret.ShortCode = smatch.FindStringSubmatch(r.RequestURI)[1]
 	case lmatch.MatchString(r.RequestURI):
 		secret.Code = lmatch.FindStringSubmatch(r.RequestURI)[1]
-	}
-	if secret.Get() {
-		rurl, _ := url.JoinPath("https://", config.Server.Domain, secret.Code)
-		http.Redirect(w, r, rurl, http.StatusFound)
-		return
-	}
-	if r.RequestURI == "/" {
-		tmpl, err := template.ParseFS(webfs, "web/index.html")
-		if err != nil {
-			log.Print(err)
+	default:
+		if r.RequestURI == "/" {
+			tmpl, err := template.ParseFS(webfs, "web/index.html")
+			if err != nil {
+				log.Print(err)
+			}
+			tmpl.Execute(w, config.Captcha)
+			return
 		}
-		tmpl.Execute(w, config.Captcha)
-	} else {
 		filebytes, err := webfs.ReadFile("web" + r.RequestURI)
 		if err != nil {
 			log.Print(err)
+			w.WriteHeader(404)
+		} else {
+			w.Header().Add("Content-Type", mime.TypeByExtension("."+strings.Split(r.RequestURI, ".")[1]))
+			w.Write(filebytes)
+			return
 		}
-		w.Header().Add("Content-Type", http.DetectContentType(filebytes))
-		w.Write(filebytes)
 	}
+	if secret.Get() {
+		agent := r.Header.Get("User-Agent")
+		if strings.Contains(agent, "facebook") {
+			w.WriteHeader(403)
+			return
+		}
+		if secret.Hidden {
+			r.ParseForm()
+			if !r.Form.Has("show") {
+				secret.Type = "show"
+			}
+		}
+		if secret.Type == "string" {
+			secret.Delete()
+		}
+		tmpl, err := template.ParseFS(webfs, "web/templates/"+secret.Type+".html")
+		if err != nil {
+			log.Print(err)
+		}
+		tmpl.Execute(w, secret)
+		return
+	}
+	rpath, err := url.JoinPath("https://", config.Server.Domain)
+	if err != nil {
+		log.Print(err)
+	}
+	http.Redirect(w, r, rpath, http.StatusFound)
 }
