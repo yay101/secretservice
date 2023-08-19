@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"html/template"
+	"io"
 	"log"
 	"math/rand"
 	"mime"
@@ -21,12 +23,11 @@ type Secret struct {
 	Code      string
 	ShortCode string
 	Secret    string `json:"secret"`
+	Blob      []byte `json:"blob"`
 	Download  bool   `json:"download"`
 	Hidden    bool   `json:"hidden"`
 	Short     bool   `json:"short"`
 	Life      int    `json:"life"`
-	Key       string `json:"key"`
-	Blob      []byte `json:"blob"`
 	Expiry    time.Time
 }
 
@@ -38,7 +39,6 @@ type Response struct {
 type Request struct {
 	Type   string `json:"type"`
 	Secret string `json:"secret"`
-	Blob   []byte `json:"blob"`
 }
 
 type Secrets []Secret
@@ -68,7 +68,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(serve))
 	mux.Handle("/blob/", http.HandlerFunc(blob))
-	mux.Handle("/service", http.HandlerFunc(service))
+	mux.Handle("/service/", http.HandlerFunc(service))
 	//start the server!
 	err := http.ListenAndServe(":"+strconv.Itoa(config.Server.Port), mux)
 	if err != nil {
@@ -116,13 +116,38 @@ func service(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(res)
 		}
 	case http.MethodPost:
-		new := Secret{}
-		err := json.NewDecoder(r.Body).Decode(&new)
+		err := r.ParseMultipartForm(64000)
 		if err != nil {
 			log.Print(err)
 			w.WriteHeader(400)
 			return
 		}
+		new := Secret{
+			Type:     r.Form.Get("type"),
+			Secret:   r.Form.Get("secret"),
+			Download: r.Form.Get("download") == "on",
+			Hidden:   r.Form.Get("hidden") == "on",
+			Short:    r.Form.Get("short") == "on",
+		}
+		new.Life, _ = strconv.Atoi(r.Form.Get("life"))
+		if new.Type != "string" {
+			f, h, err := r.FormFile("file")
+			if err != nil {
+				log.Print(err)
+				w.WriteHeader(400)
+				return
+			}
+			new.Secret = h.Filename
+			buf := bytes.NewBuffer(nil)
+			_, err = io.Copy(buf, f)
+			if err != nil {
+				log.Print(err)
+				w.WriteHeader(400)
+				return
+			}
+			new.Blob = buf.Bytes()
+		}
+		defer r.Body.Close()
 		if new.Short {
 			new.ShortCode = random(6)
 		}
@@ -137,6 +162,7 @@ func service(w http.ResponseWriter, r *http.Request) {
 		if new.Add() {
 			var secreturl string
 			if new.Short {
+				new.ShortCode = random(6)
 				secreturl, _ = url.JoinPath("https://", config.Server.Domain, new.ShortCode)
 			} else {
 				secreturl, _ = url.JoinPath("https://", config.Server.Domain, new.Code)
@@ -154,12 +180,42 @@ func service(w http.ResponseWriter, r *http.Request) {
 }
 
 func serve(w http.ResponseWriter, r *http.Request) {
+	agent := r.Header.Get("User-Agent")
+	if strings.Contains(agent, "facebook") {
+		w.WriteHeader(403)
+		return
+	}
 	secret := Secret{}
 	switch true {
 	case smatch.MatchString(r.RequestURI):
 		secret.ShortCode = smatch.FindStringSubmatch(r.RequestURI)[1]
+		if secret.Get() {
+			lPath, err := url.JoinPath("https://", config.Server.Domain, secret.Code)
+			if err != nil {
+				log.Print(err)
+			}
+			http.Redirect(w, r, lPath, http.StatusFound)
+			return
+		}
 	case lmatch.MatchString(r.RequestURI):
 		secret.Code = lmatch.FindStringSubmatch(r.RequestURI)[1]
+		if secret.Get() {
+			if secret.Hidden {
+				r.ParseForm()
+				if !r.Form.Has("show") {
+					secret.Type = "show"
+				}
+			}
+			if secret.Type == "string" {
+				secret.Delete()
+			}
+			tmpl, err := template.ParseFS(webfs, "web/templates/"+secret.Type+".html")
+			if err != nil {
+				log.Print(err)
+			}
+			tmpl.Execute(w, secret)
+			return
+		}
 	default:
 		if r.RequestURI == "/" {
 			tmpl, err := template.ParseFS(webfs, "web/index.html")
@@ -178,28 +234,6 @@ func serve(w http.ResponseWriter, r *http.Request) {
 			w.Write(filebytes)
 			return
 		}
-	}
-	if secret.Get() {
-		agent := r.Header.Get("User-Agent")
-		if strings.Contains(agent, "facebook") {
-			w.WriteHeader(403)
-			return
-		}
-		if secret.Hidden {
-			r.ParseForm()
-			if !r.Form.Has("show") {
-				secret.Type = "show"
-			}
-		}
-		if secret.Type == "string" {
-			secret.Delete()
-		}
-		tmpl, err := template.ParseFS(webfs, "web/templates/"+secret.Type+".html")
-		if err != nil {
-			log.Print(err)
-		}
-		tmpl.Execute(w, secret)
-		return
 	}
 	rpath, err := url.JoinPath("https://", config.Server.Domain)
 	if err != nil {

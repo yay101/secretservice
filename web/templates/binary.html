@@ -18,10 +18,9 @@
             <footer id="filesize"></footer>
         </article>
         <script>
-            fetch(`${window.location.origin}/blob/${window.location.pathname.split("/")[2]}/${window.location.pathname.split("/")[3]}`)
+            fetch(`${window.location.origin}/blob/${window.location.pathname.split("/")[1]}`)
             .then(response => response.blob())
             .then(blob => {
-                key = "{{.Key}}";
                 document.getElementById("filename").innerText = `The file is a ${blob.type} of ${blob.size} bytes.`;
                 document.getElementById("downloadlink").href = URL.createObjectURL(blob);
                 document.getElementById("downloadlink").removeAttribute("disabled");

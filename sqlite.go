@@ -24,7 +24,7 @@ func dbinit() {
 		os.Chmod(path.Join("./", config.Database.Name), 0700)
 	}
 	//prepare secrets table
-	secretdb, err := db.Prepare("CREATE TABLE IF NOT EXISTS secrets (id INTEGER PRIMARY KEY, type TEXT, code TEXT, shortcode TEXT, secret TEXT, download BOOL, hidden BOOL, short BOOL, life INTEGER, key TEXT, blob BLOB, expiry DATETIME)")
+	secretdb, err := db.Prepare("CREATE TABLE IF NOT EXISTS secrets (id INTEGER PRIMARY KEY, type TEXT, code TEXT, shortcode TEXT, secret TEXT, download BOOL, hidden BOOL, short BOOL, life INTEGER, blob BLOB, expiry DATETIME)")
 	if err != nil {
 		log.Fatal("Error in creating table")
 	} else {
@@ -34,7 +34,7 @@ func dbinit() {
 }
 
 func (s *Secret) Add() bool {
-	res, err := db.Exec("INSERT INTO secrets (type, code, shortcode, secret, download, hidden, short, life, key, blob, expiry) VALUES(?,?,?,?,?,?,?,?,?,?,?)", s.Type, s.Code, s.ShortCode, s.Secret, s.Download, s.Hidden, s.Short, s.Life, s.Key, s.Blob, s.Expiry)
+	res, err := db.Exec("INSERT INTO secrets (type, code, shortcode, secret, download, hidden, short, life, blob, expiry) VALUES(?,?,?,?,?,?,?,?,?,?)", s.Type, s.Code, s.ShortCode, s.Secret, s.Download, s.Hidden, s.Short, s.Life, s.Blob, s.Expiry)
 	if err != nil {
 		log.Print(err)
 		return false
@@ -54,7 +54,7 @@ func (s *Secret) Get() bool {
 
 		row = db.QueryRow("SELECT * FROM secrets WHERE code = ?", s.Code)
 	}
-	err := row.Scan(&s.Id, &s.Type, &s.Code, &s.ShortCode, &s.Secret, &s.Download, &s.Hidden, &s.Short, &s.Life, &s.Key, &s.Blob, &s.Expiry)
+	err := row.Scan(&s.Id, &s.Type, &s.Code, &s.ShortCode, &s.Secret, &s.Download, &s.Hidden, &s.Short, &s.Life, &s.Blob, &s.Expiry)
 	if err != nil {
 		log.Print(err)
 		return false
@@ -81,7 +81,7 @@ func dbClean() {
 	var oldSecrets Secrets
 	for rows.Next() {
 		var tmp Secret
-		err = rows.Scan(nil, nil, &tmp.Code, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		err = rows.Scan(&tmp.Id, &tmp.Type, &tmp.Code, &tmp.ShortCode, &tmp.Secret, &tmp.Download, &tmp.Hidden, &tmp.Short, &tmp.Life, &tmp.Blob, &tmp.Expiry)
 		if err != nil {
 			log.Print(err)
 		} else {
