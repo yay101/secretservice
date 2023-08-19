@@ -3,7 +3,7 @@ Ever wanted to share a file or information via a link that only works once and d
 Then this is the service for you.
 
 You can self host this service behind whatever reverse proxy you prefer.
-To build install go on your build system and run:
+To build, install go on your build system and run:
 go build -ldflags="-s -w"
 
 Run once to generate the config in the same folder as application.
@@ -22,6 +22,7 @@ Use the following environmental variables:
 
 This service was made over 2 days for fun and is getting the rough edges worked on to get it to version 1.
 To Do:
+- [X] Implement short urls.
 - [X] Embed web folder
 - [ ] Finalize CSS
 - [ ] File encryption
