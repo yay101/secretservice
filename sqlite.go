@@ -48,10 +48,10 @@ func (s *Secret) Add() bool {
 
 func (s *Secret) Get() bool {
 	var row *sql.Row
-	if s.ShortCode != "" {
+	if s.Short {
+		log.Print("short")
 		row = db.QueryRow("SELECT * FROM secrets WHERE shortcode = ? AND short = ?", s.ShortCode, true)
 	} else {
-
 		row = db.QueryRow("SELECT * FROM secrets WHERE code = ?", s.Code)
 	}
 	err := row.Scan(&s.Id, &s.Type, &s.Code, &s.ShortCode, &s.Secret, &s.Download, &s.Hidden, &s.Short, &s.Life, &s.Blob, &s.Expiry)

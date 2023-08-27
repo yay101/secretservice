@@ -18,10 +18,20 @@
             <footer id="filesize"></footer>
         </article>
         <script>
+            function bytes2Human(fileSizeInBytes) {
+                var i = -1;
+                var byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
+                do {
+                    fileSizeInBytes /= 1024;
+                    i++;
+                } while (fileSizeInBytes > 1024);
+
+                return Math.max(fileSizeInBytes, 0.1).toFixed(1) + byteUnits[i];
+            }
             fetch(`${window.location.origin}/blob/${window.location.pathname.split("/")[1]}`)
             .then(response => response.blob())
             .then(blob => {
-                document.getElementById("filename").innerText = `The file is a ${blob.type} of ${blob.size} bytes.`;
+                document.getElementById("filename").innerText = `The file is a ${blob.type} of ${bytes2Human(blob.size)}.`;
                 document.getElementById("downloadlink").href = URL.createObjectURL(blob);
                 document.getElementById("downloadlink").removeAttribute("disabled");
                 document.getElementById("downloadlink").removeAttribute("aria-busy");

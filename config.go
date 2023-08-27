@@ -7,9 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
-	"github.com/google/uuid"
 	"gopkg.in/yaml.v2"
 )
 
@@ -22,6 +20,8 @@ type Config struct {
 type ServerSettings struct {
 	Name      string    `json:"name"`
 	Port      int       `json:"port"`
+	Sslport   int       `json:"sslport"`
+	Proxy     bool      `json:"proxy"`
 	Domain    string    `json:"domain"`
 	ApiKey    string    `json:"apikey"`
 	Resources Resources `json:"resources"`
@@ -40,14 +40,16 @@ type DatabaseSettings struct {
 func (c *Config) Init() {
 	c = &Config{
 		Server: ServerSettings{
-			Name:   "SecretService",
-			Port:   3001,
-			Domain: "secretservice.au",
-			ApiKey: strings.Join(strings.Split(uuid.New().String(), "-"), ""),
+			Name:    "SecretService",
+			Port:    80,
+			Sslport: 443,
+			Proxy:   false,
+			Domain:  "secretservice.au",
+			ApiKey:  random(128),
 		},
 		Database: DatabaseSettings{
 			Name: "secrets.db",
-			Key:  strings.Join(strings.Split(uuid.New().String(), "-"), ""),
+			Key:  random(128),
 		},
 	}
 	c.Save()
@@ -61,6 +63,14 @@ func (c *Config) Load() {
 		if err != nil {
 			log.Print("Error getting port from env: " + err.Error())
 		}
+		sslport, err := strconv.Atoi(os.Getenv("secure_port"))
+		if err != nil {
+			log.Print("Error getting port from env: " + err.Error())
+		}
+		proxy, err := strconv.ParseBool(os.Getenv("proxy_enabled"))
+		if err != nil {
+			log.Print("Error getting captcha status from env: " + err.Error())
+		}
 		captcha, err := strconv.ParseBool(os.Getenv("captcha_enabled"))
 		if err != nil {
 			log.Print("Error getting captcha status from env: " + err.Error())
@@ -71,10 +81,12 @@ func (c *Config) Load() {
 		}
 		c = &Config{
 			Server: ServerSettings{
-				Name:   os.Getenv("server_name"),
-				Port:   port,
-				Domain: os.Getenv("server_domain"),
-				ApiKey: os.Getenv("server_apikey"),
+				Name:    os.Getenv("server_name"),
+				Port:    port,
+				Sslport: sslport,
+				Proxy:   proxy,
+				Domain:  os.Getenv("server_domain"),
+				ApiKey:  os.Getenv("server_apikey"),
 			},
 			Database: DatabaseSettings{
 				Name: os.Getenv("database_name"),

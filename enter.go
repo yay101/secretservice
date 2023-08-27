@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"embed"
 	"encoding/json"
 	"html/template"
@@ -15,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/acme/autocert"
 )
 
 type Secret struct {
@@ -70,9 +73,29 @@ func main() {
 	mux.Handle("/blob/", http.HandlerFunc(blob))
 	mux.Handle("/service/", http.HandlerFunc(service))
 	//start the server!
-	err := http.ListenAndServe(":"+strconv.Itoa(config.Server.Port), mux)
-	if err != nil {
-		log.Print(err)
+	if config.Server.Proxy {
+		err := http.ListenAndServe(":"+strconv.Itoa(config.Server.Port), mux)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		certManager := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(config.Server.Domain),
+			Cache:      autocert.DirCache("./certs"),
+		}
+		server := &http.Server{
+			Addr:    ":" + strconv.Itoa(config.Server.Sslport),
+			Handler: mux,
+			TLSConfig: &tls.Config{
+				GetCertificate: certManager.GetCertificate,
+			},
+		}
+		go http.ListenAndServe(":"+strconv.Itoa(config.Server.Port), certManager.HTTPHandler(nil))
+		err := server.ListenAndServeTLS("", "")
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -162,7 +185,6 @@ func service(w http.ResponseWriter, r *http.Request) {
 		if new.Add() {
 			var secreturl string
 			if new.Short {
-				new.ShortCode = random(6)
 				secreturl, _ = url.JoinPath("https://", config.Server.Domain, new.ShortCode)
 			} else {
 				secreturl, _ = url.JoinPath("https://", config.Server.Domain, new.Code)
@@ -172,7 +194,6 @@ func service(w http.ResponseWriter, r *http.Request) {
 
 		} else {
 			res.State = false
-			res.Url = ""
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(res)
@@ -188,6 +209,7 @@ func serve(w http.ResponseWriter, r *http.Request) {
 	secret := Secret{}
 	switch true {
 	case smatch.MatchString(r.RequestURI):
+		secret.Short = true
 		secret.ShortCode = smatch.FindStringSubmatch(r.RequestURI)[1]
 		if secret.Get() {
 			lPath, err := url.JoinPath("https://", config.Server.Domain, secret.Code)
