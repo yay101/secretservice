@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light dark" />
+        <title>The Secret Service</title>
+        <meta name="keywords" content="password file sharing" />
+        <link rel="stylesheet" href="/www/pico.min.css" />
+        <link rel="icon" href="/www/ss-ico.svg" type="image/svg+xml" />
+    </head>
+    <body onload="init()" class="container">
+        <div style="margin-top: 1rem">
+            <article id="result"></article>
+        </div>
+        <script>
+            function b64ToAB(base64) {
+                return Uint8Array.from(
+                    atob(base64)
+                        .split(",")
+                        .map((x) => parseInt(x)),
+                );
+            }
+            async function decrypt(encrypted, iv, key) {
+                return await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: iv },
+                    key,
+                    encrypted,
+                );
+            }
+            async function init() {
+                const iv =
+                    location.pathname.split("/").length == 3
+                        ? b64ToAB(location.pathname.split("/")[2])
+                        : b64ToAB("{{.Iv}}");
+                const key = await window.crypto.subtle.importKey(
+                    "raw",
+                    b64ToAB("{{.Key}}"),
+                    { name: "AES-GCM", iv: iv },
+                    false,
+                    ["encrypt", "decrypt"],
+                );
+                const data = b64ToAB("{{.Data}}");
+                decrypt(data, iv, key)
+                    .then((res) => {
+                        document.getElementById("result").innerText =
+                            new TextDecoder().decode(res);
+                    })
+                    .catch((error) => {
+                        console.log(error);
+                    });
+            }
+        </script>
+    </body>
+</html>

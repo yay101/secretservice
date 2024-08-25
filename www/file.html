@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light dark" />
+        <title>The Secret Service</title>
+        <meta name="keywords" content="password file sharing" />
+        <link rel="stylesheet" href="/www/pico.min.css" />
+        <link rel="icon" href="/www/ss-ico.svg" type="image/svg+xml" />
+    </head>
+    <body onload="init()" class="container">
+        <div style="margin-top: 1rem">
+            <article id="result"></article>
+            <progress id="progress" max="100" />
+        </div>
+
+        <script>
+            var iv, key, filename, progress, length;
+            function sizer(b) {
+                var i = -1;
+                var byteUnits = [
+                    " kB",
+                    " MB",
+                    " GB",
+                    " TB",
+                    "PB",
+                    "EB",
+                    "ZB",
+                    "YB",
+                ];
+                do {
+                    b /= 1024;
+                    i++;
+                } while (b > 1024);
+                return Math.max(b, 0.1).toFixed(1) + byteUnits[i];
+            }
+            function b64ToAB(base64) {
+                return Uint8Array.from(
+                    atob(base64)
+                        .split(",")
+                        .map((x) => parseInt(x)),
+                );
+            }
+            function decode(message) {
+                return new TextDecoder().decode(message);
+            }
+            async function decrypt(encrypted) {
+                return await crypto.subtle
+                    .decrypt({ name: "AES-GCM", iv: iv }, key, encrypted)
+                    .catch((error) => {
+                        console.log("decrypt", error);
+                    });
+            }
+            async function download() {
+                async function getChunk() {
+                    let response = await fetch(location.pathname, {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/octet-stream",
+                            "Current-Chunk": chunk,
+                        },
+                    }).then((res) => res.arrayBuffer());
+                    return response;
+                }
+                async function saveChunk() {
+                    data = await decrypt(await getChunk());
+                    blob = new Blob([blob, data], {
+                        type: "application/octet-stream",
+                    });
+                    progress.setAttribute(
+                        "value",
+                        Math.floor((blob.size / length) * 100),
+                    );
+                    console.log(blob.size, length, length - blob.size);
+                    if (blob.size == length) {
+                        let link = document.createElement("a");
+                        link.href = window.URL.createObjectURL(blob);
+                        link.download = filename;
+                        document.getElementById("result").append(link);
+                        link.click();
+                    } else {
+                        chunk++;
+                        saveChunk();
+                    }
+                }
+                progress = document.getElementById("progress");
+                var chunk = 0;
+                var blob = new Blob();
+                saveChunk();
+            }
+            async function init() {
+                iv =
+                    location.pathname.split("/").length == 3
+                        ? b64ToAB(location.pathname.split("/")[2])
+                        : b64ToAB("{{.Iv}}");
+                key = await window.crypto.subtle.importKey(
+                    "raw",
+                    b64ToAB("{{.Key}}"),
+                    { name: "AES-GCM", iv: iv },
+                    false,
+                    ["encrypt", "decrypt"],
+                );
+                const type = "{{.Type}}";
+                const data = b64ToAB("{{.Data}}");
+                length = Number("{{.Length}}");
+                decrypt(data, iv, key)
+                    .then((res) => {
+                        document.getElementById("result").innerText =
+                            decode(res) + " " + sizer(length);
+                        filename = decode(res);
+                        download();
+                    })
+                    .catch((error) => {
+                        console.log(error);
+                    });
+            }
+        </script>
+    </body>
+</html>

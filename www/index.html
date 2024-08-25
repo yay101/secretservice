@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light dark" />
+        <title>The Secret Service</title>
+        <meta name="keywords" content="password file sharing" />
+        <link rel="stylesheet" href="/www/pico.min.css" />
+        <link rel="icon" href="/www/ss-ico.svg" type="image/svg+xml" />
+    </head>
+    <body
+        onload="document.getElementById('type').dispatchEvent(new Event('change'))"
+    >
+        <main class="container">
+            <form>
+                <fieldset class="grid">
+                    <select
+                        id="type"
+                        onchange="for(const elm of document.getElementsByClassName('form-section')){elm.style.display = 'none'};document.getElementById(this.value).style.display = '';"
+                    >
+                        <option value="string">Text</option>
+                        <option value="binary">File</option>
+                    </select>
+                    <select id="expiry">
+                        <option value="1">1 Hour</option>
+                        <option value="2">2 Hours</option>
+                        <option value="4">4 Hours</option>
+                        <option value="8">8 Hours</option>
+                        <option value="12" selected>12 Hours</option>
+                        <option value="24">24 Hours</option>
+                    </select>
+                    <fieldset>
+                        <input
+                            style="height: 3rem; width: 3rem"
+                            id="short"
+                            name="short"
+                            type="checkbox"
+                        />
+                        <label> Use Short URL </label>
+                    </fieldset>
+                </fieldset>
+                <div style="display: flex">
+                    <fieldset class="form-section" id="string">
+                        <textarea
+                            style="margin-bottom: unset"
+                            id="message-box"
+                            name="message-box"
+                            placeholder="Secrets go here..."
+                        ></textarea>
+                    </fieldset>
+                    <fieldset
+                        style="display: none"
+                        class="form-section"
+                        id="binary"
+                    >
+                        <input
+                            style="margin-bottom: 0"
+                            class="file-input"
+                            type="file"
+                            id="file-selector"
+                            name="file-selector"
+                        />
+                    </fieldset>
+                    <fieldset
+                        style="display: none"
+                        class="form-section"
+                        id="chat"
+                    >
+                        <input
+                            style="margin-bottom: 0"
+                            type="text"
+                            id="chat-name"
+                            name="chat-name"
+                        />
+                    </fieldset>
+                    <button
+                        id="submit"
+                        style="margin-left: var(--pico-spacing)"
+                        type="button"
+                        onclick="begin(this)"
+                        class="button is-link"
+                    >
+                        Submit
+                    </button>
+                </div>
+            </form>
+            <section>
+                <div id="result" class="box"></div>
+            </section>
+        </main>
+        <script>
+            var iv, key;
+            async function upload(url, file, id) {
+                const uploader = new Worker("/www/upload.js");
+                pro = document.getElementById(`progress-${id}`);
+                fileSize = file.size;
+                uploader.postMessage({
+                    url: url,
+                    file: file,
+                    key: key,
+                    iv: iv,
+                    cs: {{.Server.Chunksize}},
+                });
+                uploader.onerror = (error) => {
+                    console.log(error);
+                };
+                uploader.onmessage = (event) => {
+                    pro.setAttribute(
+                        "value",
+                        Math.floor((Number(event.data) / fileSize) * 100),
+                    );
+                };
+            }
+            async function challenge() {
+                return fetch();
+            }
+            async function begin(target) {
+                iv = window.crypto.getRandomValues(new Uint8Array(12));
+                key = await crypto.subtle.generateKey(
+                    { name: "AES-GCM", length: 256 },
+                    true, // extractable
+                    ["encrypt", "decrypt"],
+                );
+                const raw = await window.crypto.subtle.exportKey("raw", key);
+                var data = {
+                    type: document.getElementById("type").value,
+                    expiry: Number(document.getElementById("expiry").value),
+                    short: document.getElementById("short").checked,
+                    key: btoa(new Uint8Array(raw)),
+                    iv: document.getElementById("short").checked
+                        ? btoa(new Uint8Array(iv))
+                        : null,
+                    data:
+                        document.getElementById("type").value == "string"
+                            ? btoa(
+                                  new Uint8Array(
+                                      await encrypt(
+                                          encode(
+                                              document.getElementById(
+                                                  "message-box",
+                                              ).value,
+                                          ),
+                                          iv,
+                                          key,
+                                      ),
+                                  ),
+                              )
+                            : btoa(
+                                  new Uint8Array(
+                                      await encrypt(
+                                          encode(
+                                              document.getElementById(
+                                                  "file-selector",
+                                              ).files[0].name,
+                                          ),
+                                          iv,
+                                          key,
+                                      ),
+                                  ),
+                              ),
+                    length:
+                        document.getElementById("type").value == "string"
+                            ? null
+                            : document.getElementById("file-selector").files[0]
+                                  .size,
+                };
+                fetch("/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(data),
+                })
+                    .then((r) => {
+                        if (r.status != 200) {
+                            return r.text();
+                        } else {
+                            return r.json();
+                        }
+                    })
+                    .then((r) => {
+                        if (typeof r == "string") {
+                            document.getElementById(
+                                "notifications",
+                            ).innerHTML += `<article class="notification">
+                <button onclick="this.parentNode.remove()" class="delete"></button>
+                ${r}
+                </article>`;
+                        } else {
+                            if (r.result) {
+                                var link = data.short
+                                    ? r.url
+                                    : r.url + "/" + btoa(new Uint8Array(iv));
+                                try {
+                                    navigator.clipboard.writeText(link);
+                                } catch (error) {
+                                    document.getElementById(
+                                        "notifications",
+                                    ).innerHTML += `<div class="notification">
+                      <button onclick="this.parentNode.remove()" class="delete"></button>
+                      ${error.message}
+                      </div>`;
+                                    console.error(error.message);
+                                }
+                                id = (Math.random() + 1)
+                                    .toString(36)
+                                    .substring(7);
+                                document.getElementById("result").innerHTML +=
+                                    `<article id="article-${id}"><div style="display:flex;"><div style="overflow-x: hidden;"><a style="text-wrap: nowrap; white-space:nowrap; display: inline-block; width:100%;text-overflow: ellipsis; overflow: hidden;" href="${link}">${link}</a></div><a target="_blank" style="display: block;position:relative;margin-left:auto;" data-tooltip="Copy to clipboard" data-placement="left"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" class="clipboard"><path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path></svg></a></div></article>`;
+                                if (data.type != "string") {
+                                    document.getElementById(
+                                        "article-" + id,
+                                    ).innerHTML +=
+                                        `<progress id="progress-${id}" value="0" max="100" />`;
+                                    upload(
+                                        r.url,
+                                        document.getElementById("file-selector")
+                                            .files[0],
+                                        id,
+                                    );
+                                }
+                            }
+                        }
+                    });
+            }
+            function encode(message) {
+                let enc = new TextEncoder();
+                return enc.encode(message);
+            }
+            async function encrypt(data) {
+                return window.crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv: iv },
+                    key,
+                    data,
+                );
+            }
+        </script>
+    </body>
+</html>
