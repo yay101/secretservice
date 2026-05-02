@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"embed"
 	"flag"
@@ -9,11 +10,13 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"encoding/json"
@@ -37,6 +40,7 @@ var (
 	itemplate *template.Template
 	vtemplate *template.Template
 	upgrader  = websocket.Upgrader{}
+	done      = make(chan struct{})
 )
 
 type config struct {
@@ -137,12 +141,30 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/www/", http.HandlerFunc(wwwrouter))
 	mux.Handle("/", http.HandlerFunc(serve))
-	//start the server!
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
 	if conf.Proxy {
-		err := http.ListenAndServe(":"+strconv.Itoa(conf.Http), mux)
-		if err != nil {
-			log.Fatal(err)
+		httpServer := &http.Server{Addr: ":" + strconv.Itoa(conf.Http), Handler: mux}
+		go func() {
+			err := httpServer.ListenAndServe()
+			if err != nil && err != http.ErrServerClosed {
+				log.Fatal(err)
+			}
+		}()
+		<-quit
+		log.Print("Shutting down server...")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		close(done)
+		if err := httpServer.Shutdown(ctx); err != nil {
+			log.Printf("Server shutdown error: %v", err)
 		}
+		if err := db.Close(); err != nil {
+			log.Printf("Database close error: %v", err)
+		}
+		log.Print("Server stopped")
 	} else {
 		cpath := path.Join(conf.Filepath, "certs")
 		certManager := autocert.Manager{
@@ -150,28 +172,60 @@ func main() {
 			HostPolicy: autocert.HostWhitelist(conf.Domain),
 			Cache:      autocert.DirCache(cpath),
 		}
-		server := &http.Server{
+		httpsServer := &http.Server{
 			Addr:    ":" + strconv.Itoa(conf.Ssl),
 			Handler: mux,
 			TLSConfig: &tls.Config{
 				GetCertificate: certManager.GetCertificate,
 			},
 		}
-		go http.ListenAndServe(":"+strconv.Itoa(conf.Http), certManager.HTTPHandler(nil))
-		err := server.ListenAndServeTLS("", "")
-		if err != nil {
-			log.Fatal(err)
+		httpServer := &http.Server{
+			Addr:    ":" + strconv.Itoa(conf.Http),
+			Handler: certManager.HTTPHandler(nil),
 		}
+		go func() {
+			err := httpServer.ListenAndServe()
+			if err != nil && err != http.ErrServerClosed {
+				log.Printf("HTTP server error: %v", err)
+			}
+		}()
+		go func() {
+			err := httpsServer.ListenAndServeTLS("", "")
+			if err != nil && err != http.ErrServerClosed {
+				log.Fatal(err)
+			}
+		}()
+		<-quit
+		log.Print("Shutting down server...")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		close(done)
+		if err := httpsServer.Shutdown(ctx); err != nil {
+			log.Printf("HTTPS server shutdown error: %v", err)
+		}
+		if err := httpServer.Shutdown(ctx); err != nil {
+			log.Printf("HTTP server shutdown error: %v", err)
+		}
+		if err := db.Close(); err != nil {
+			log.Printf("Database close error: %v", err)
+		}
+		log.Print("Server stopped")
 	}
 }
 
 func clock() {
 	//start the clock
 	ticker := time.NewTicker(time.Minute)
-	for range ticker.C {
-		err := ss.Expire()
-		if err != nil {
-			log.Print(err)
+	for {
+		select {
+		case <-ticker.C:
+			err := ss.Expire()
+			if err != nil {
+				log.Print(err)
+			}
+		case <-done:
+			ticker.Stop()
+			return
 		}
 	}
 }
