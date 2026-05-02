@@ -12,14 +12,12 @@ import (
 type SecretService struct{}
 
 var (
-	dbVersion = "1.9.1"
 	db      *embeddb.DB
 	ss      SecretService
 	secrets *embeddb.Table[secret]
 )
 
 func initdb() (err error) {
-	log.Printf("Connecting to db (v%s)...", dbVersion)
 	dbPath := "./secrets.db"
 	db, err = embeddb.Open(dbPath)
 	if err != nil {
