@@ -9,20 +9,19 @@
         <link rel="stylesheet" href="/www/pico.min.css" />
         <link rel="icon" href="/www/ss-ico.svg" type="image/svg+xml" />
     </head>
-    <body
-        onload="document.getElementById('type').dispatchEvent(new Event('change'))"
-    >
+    <body>
         <main class="container">
-            <form>
+            <form id="secret-form" method="POST">
+                <fieldset>
+                    <label for="secret-text">Secret Text</label>
+                    <textarea id="secret-text" name="text" placeholder="Enter secret text..."></textarea>
+                </fieldset>
+                <fieldset>
+                    <label for="secret-files">Files</label>
+                    <input type="file" id="secret-files" name="files" multiple />
+                </fieldset>
                 <fieldset class="grid">
-                    <select
-                        id="type"
-                        onchange="for(const elm of document.getElementsByClassName('form-section')){elm.style.display = 'none'};document.getElementById(this.value).style.display = '';"
-                    >
-                        <option value="string">Text</option>
-                        <option value="binary">File</option>
-                    </select>
-                    <select id="expiry">
+                    <select id="expiry" name="expiry">
                         <option value="1">1 Hour</option>
                         <option value="2">2 Hours</option>
                         <option value="4">4 Hours</option>
@@ -31,210 +30,285 @@
                         <option value="24">24 Hours</option>
                     </select>
                     <fieldset>
-                        <input
-                            style="height: 3rem; width: 3rem"
-                            id="short"
-                            name="short"
-                            type="checkbox"
-                        />
+                        <input style="height: 3rem; width: 3rem" id="short" name="short" type="checkbox" />
                         <label> Use Short URL </label>
                     </fieldset>
                 </fieldset>
-                <div style="display: flex">
-                    <fieldset class="form-section" id="string">
-                        <textarea
-                            style="margin-bottom: unset"
-                            id="message-box"
-                            name="message-box"
-                            placeholder="Secrets go here..."
-                        ></textarea>
-                    </fieldset>
-                    <fieldset
-                        style="display: none"
-                        class="form-section"
-                        id="binary"
-                    >
-                        <input
-                            style="margin-bottom: 0"
-                            class="file-input"
-                            type="file"
-                            id="file-selector"
-                            name="file-selector"
-                        />
-                    </fieldset>
-                    <fieldset
-                        style="display: none"
-                        class="form-section"
-                        id="chat"
-                    >
-                        <input
-                            style="margin-bottom: 0"
-                            type="text"
-                            id="chat-name"
-                            name="chat-name"
-                        />
-                    </fieldset>
-                    <button
-                        id="submit"
-                        style="margin-left: var(--pico-spacing)"
-                        type="button"
-                        onclick="begin(this)"
-                        class="button is-link"
-                    >
-                        Submit
-                    </button>
-                </div>
+                <button type="submit" class="button is-link">Submit</button>
             </form>
             <section>
-                <div id="result" class="box"></div>
+                <div id="result"></div>
             </section>
         </main>
+        <script src="/www/crypto.js"></script>
         <script>
-            var iv, key;
-            async function upload(url, file, id) {
-                const uploader = new Worker("/www/upload.js");
-                pro = document.getElementById(`progress-${id}`);
-                fileSize = file.size;
-                uploader.postMessage({
-                    url: url,
-                    file: file,
-                    key: key,
-                    iv: iv,
-                    cs: {{.Server.Chunksize}},
-                });
-                uploader.onerror = (error) => {
-                    console.log(error);
-                };
-                uploader.onmessage = (event) => {
-                    pro.setAttribute(
-                        "value",
-                        Math.floor((Number(event.data) / fileSize) * 100),
-                    );
+            console.log("index.html script loaded");
+            const MAX_CONCURRENT_UPLOADS = 3;
+            let activeUploads = 0;
+            let iv, key;
+            let fileRegistry = new Map();
+
+            function getText() {
+                const textarea = document.getElementById('secret-text');
+                return textarea.value.trim();
+            }
+
+            function clearText() {
+                document.getElementById('secret-text').value = '';
+            }
+
+            function getFiles() {
+                const input = document.getElementById('secret-files');
+                return input.files;
+            }
+
+            function clearFiles() {
+                const input = document.getElementById('secret-files');
+                input.value = '';
+            }
+
+            function getExpiry() {
+                return Number(document.getElementById('expiry').value);
+            }
+
+            function getShortUrl() {
+                return document.getElementById('short').checked;
+            }
+
+            function buildRequestData(text, files, expiry, isShort, keyBase64, ivBase64) {
+                const secrets = [];
+                
+                if (text) {
+                    secrets.push({
+                        type: 'text',
+                        data: text,
+                        length: text.length
+                    });
+                }
+                
+                for (const file of files) {
+                    secrets.push({
+                        type: 'file',
+                        data: file.name,
+                        length: file.size,
+                        _file: file
+                    });
+                    fileRegistry.set(file.size, file);
+                }
+                
+                return {
+                    short: isShort,
+                    expiry: expiry,
+                    secrets: secrets,
+                    key: keyBase64,
+                    iv: ivBase64
                 };
             }
-            async function challenge() {
-                return fetch();
+
+            async function encryptData(data, iv, key) {
+                const encoded = encode(data);
+                const encrypted = await encrypt(encoded, iv, key);
+                const encryptedBytes = new Uint8Array(encrypted);
+                const encryptedString = Array.from(encryptedBytes).map(b => String.fromCharCode(b)).join('');
+                return btoa(encryptedString);
             }
-            async function begin(target) {
-                iv = window.crypto.getRandomValues(new Uint8Array(12));
-                key = await crypto.subtle.generateKey(
+
+            function base64Encode(bytes) {
+                const str = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+                return btoa(str);
+            }
+
+            async function generateCryptoKeys() {
+                const ivBytes = window.crypto.getRandomValues(new Uint8Array(12));
+                const key = await crypto.subtle.generateKey(
                     { name: "AES-GCM", length: 256 },
-                    true, // extractable
-                    ["encrypt", "decrypt"],
+                    true,
+                    ["encrypt", "decrypt"]
                 );
-                const raw = await window.crypto.subtle.exportKey("raw", key);
-                var data = {
-                    type: document.getElementById("type").value,
-                    expiry: Number(document.getElementById("expiry").value),
-                    short: document.getElementById("short").checked,
-                    key: btoa(new Uint8Array(raw)),
-                    iv: document.getElementById("short").checked
-                        ? btoa(new Uint8Array(iv))
-                        : null,
-                    data:
-                        document.getElementById("type").value == "string"
-                            ? btoa(
-                                  new Uint8Array(
-                                      await encrypt(
-                                          encode(
-                                              document.getElementById(
-                                                  "message-box",
-                                              ).value,
-                                          ),
-                                          iv,
-                                          key,
-                                      ),
-                                  ),
-                              )
-                            : btoa(
-                                  new Uint8Array(
-                                      await encrypt(
-                                          encode(
-                                              document.getElementById(
-                                                  "file-selector",
-                                              ).files[0].name,
-                                          ),
-                                          iv,
-                                          key,
-                                      ),
-                                  ),
-                              ),
-                    length:
-                        document.getElementById("type").value == "string"
-                            ? null
-                            : document.getElementById("file-selector").files[0]
-                                  .size,
+                const rawKey = await window.crypto.subtle.exportKey("raw", key);
+                return {
+                    iv: ivBytes,
+                    key: key,
+                    keyBase64: base64Encode(new Uint8Array(rawKey)),
+                    ivBase64: btoa(String.fromCharCode.apply(null, ivBytes))
                 };
+            }
+
+            async function uploadFile(wsUrl, file, onProgress) {
+                console.log("uploadFile called, wsUrl:", wsUrl, "file:", file.name, "size:", file.size, "global iv:", iv, "global key:", key);
+                return new Promise((resolve, reject) => {
+                    const ws = new WebSocket(wsUrl);
+                    const chunkSize = {{.Chunksize}};
+                    const totalParts = Math.ceil(file.size / chunkSize);
+                    let currentPart = 0;
+
+                    const sendNext = () => {
+                        if (currentPart >= totalParts) {
+                            ws.close();
+                            resolve();
+                            return;
+                        }
+                        const chunkIndex = currentPart;
+                        const start = chunkIndex * chunkSize;
+                        const end = Math.min(start + chunkSize, file.size);
+                        const blob = file.slice(start, end);
+
+                        const reader = new FileReader();
+                        reader.onload = async () => {
+                            const chunkIv = new Uint8Array(iv.length);
+                            chunkIv.set(iv);
+                            const counter = new Uint8Array(4);
+                            new DataView(counter.buffer).setUint32(0, chunkIndex, false);
+                            chunkIv.set(counter, iv.length - 4);
+                            const encrypted = await encrypt(new Uint8Array(reader.result), chunkIv, key);
+                            const encryptedBytes = new Uint8Array(encrypted);
+                            const encryptedString = Array.from(encryptedBytes).map(b => String.fromCharCode(b)).join('');
+                            const encryptedBase64 = btoa(encryptedString);
+                            ws.send(JSON.stringify({
+                                total: totalParts,
+                                current: chunkIndex,
+                                data: encryptedBase64
+                            }));
+                        };
+
+                        reader.readAsArrayBuffer(blob);
+                    };
+
+                    ws.onmessage = (event) => {
+                        const msg = JSON.parse(event.data);
+                        if (msg.ack !== undefined) {
+                            onProgress(msg.ack + 1);
+                            currentPart = msg.ack + 1;
+                            sendNext();
+                        }
+                    };
+
+                    ws.onopen = async () => {
+                        sendNext();
+                    };
+
+                    ws.onerror = (error) => reject(error);
+                });
+            }
+
+            function buildResultHtml(url, secrets) {
+                let html = `<article><div style="display:flex;"><div style="overflow-x: hidden;"><a style="text-wrap:nowrap;white-space:nowrap;display:inline-block;width:100%;text-overflow:ellipsis;overflow:hidden;" href="${url}">${url}</a></div></div></article>`;
+                const hasFiles = secrets.some(s => s.type === 'file' && !s.uploaded);
+                if (hasFiles) {
+                    html += `<progress id="upload-progress" value="0" max="100" style="width: 100%;"></progress>`;
+                }
+                return html;
+            }
+
+            async function uploadFiles(url, secrets, onProgress) {
+                const chunkSize = {{.Chunksize}};
+                let totalChunks = 0;
+                const fileData = [];
+                
+                console.log("uploadFiles called with url:", url, "secrets:", JSON.stringify(secrets));
+                let fileCount = 0;
+                for (const secret of secrets) {
+                    console.log("Checking secret:", secret.id, "type:", secret.type, "uploaded:", secret.uploaded);
+                    if (secret.type === 'file' && (secret.uploaded === false || secret.uploaded === undefined)) {
+                        fileCount++;
+                        const file = fileRegistry.get(secret.length);
+                        if (file) {
+                            const chunks = Math.ceil(file.size / chunkSize);
+                            console.log("File:", file.name, "size:", file.size, "chunks:", chunks);
+                            totalChunks += chunks;
+                            fileData.push({ secret, file, chunks });
+                        }
+                    }
+                }
+                console.log("Total files:", fileCount, "totalChunks:", totalChunks);
+                
+                let chunksDone = 0;
+                const updateProgress = (totalChunksDone) => {
+                    console.log("Progress update:", totalChunksDone, "/", totalChunks, "=", (totalChunksDone / totalChunks) * 100);
+                    if (onProgress) {
+                        onProgress((totalChunksDone / totalChunks) * 100);
+                    }
+                };
+                
+                for (const { secret, file, chunks } of fileData) {
+                    while (activeUploads >= MAX_CONCURRENT_UPLOADS) {
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                    activeUploads++;
+                    const urlParts = url.replace("https://" + window.location.host + "/", "").split("/");
+                    const wsUrl = `wss://${window.location.host}/${urlParts[0]}/${secret.id}`;
+                    console.log("uploadFile wsUrl:", wsUrl);
+                    await uploadFile(wsUrl, file, (fileChunksDone) => {
+                        updateProgress(chunksDone + fileChunksDone);
+                    });
+                    chunksDone += chunks;
+                    activeUploads--;
+                }
+            }
+
+            function showError(message) {
+                document.getElementById('result').innerHTML = `<article class="notification"><button onclick="this.parentNode.remove()" class="delete"></button>${message}</article>`;
+            }
+
+            async function submitForm(event) {
+                console.log("submitForm called, event:", event);
+                event.preventDefault();
+                
+                const text = getText();
+                const files = getFiles();
+                
+                if (!text && files.length === 0) {
+                    showError('Please enter text or select files');
+                    return;
+                }
+
+                const expiry = getExpiry();
+                const isShort = getShortUrl();
+                const crypto = await generateCryptoKeys();
+                iv = crypto.iv;
+                key = crypto.key;
+                const keyBase64 = crypto.keyBase64;
+                const ivBase64 = crypto.ivBase64;
+
+                const requestData = buildRequestData(text, files, expiry, isShort, keyBase64, ivBase64);
+
+                for (let i = 0; i < requestData.secrets.length; i++) {
+                    requestData.secrets[i].data = await encryptData(requestData.secrets[i].data, iv, key);
+                }
+
                 fetch("/", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(data),
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(requestData),
                 })
-                    .then((r) => {
-                        if (r.status != 200) {
-                            return r.text();
-                        } else {
-                            return r.json();
-                        }
-                    })
-                    .then((r) => {
-                        if (typeof r == "string") {
-                            document.getElementById(
-                                "notifications",
-                            ).innerHTML += `<article class="notification">
-                <button onclick="this.parentNode.remove()" class="delete"></button>
-                ${r}
-                </article>`;
-                        } else {
-                            if (r.result) {
-                                var link = data.short
-                                    ? r.url
-                                    : r.url + "/" + btoa(new Uint8Array(iv));
-                                try {
-                                    navigator.clipboard.writeText(link);
-                                } catch (error) {
-                                    document.getElementById(
-                                        "notifications",
-                                    ).innerHTML += `<div class="notification">
-                      <button onclick="this.parentNode.remove()" class="delete"></button>
-                      ${error.message}
-                      </div>`;
-                                    console.error(error.message);
-                                }
-                                id = (Math.random() + 1)
-                                    .toString(36)
-                                    .substring(7);
-                                document.getElementById("result").innerHTML +=
-                                    `<article id="article-${id}"><div style="display:flex;"><div style="overflow-x: hidden;"><a style="text-wrap: nowrap; white-space:nowrap; display: inline-block; width:100%;text-overflow: ellipsis; overflow: hidden;" href="${link}">${link}</a></div><a target="_blank" style="display: block;position:relative;margin-left:auto;" data-tooltip="Copy to clipboard" data-placement="left"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" class="clipboard"><path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path></svg></a></div></article>`;
-                                if (data.type != "string") {
-                                    document.getElementById(
-                                        "article-" + id,
-                                    ).innerHTML +=
-                                        `<progress id="progress-${id}" value="0" max="100" />`;
-                                    upload(
-                                        r.url,
-                                        document.getElementById("file-selector")
-                                            .files[0],
-                                        id,
-                                    );
-                                }
-                            }
-                        }
+                .then(r => r.ok ? r.json() : Promise.reject(r.text()))
+                .then(async (r) => {
+                    const fullUrl = requestData.short ? r.short : r.url;
+                    const resultHtml = buildResultHtml(fullUrl, r.secrets);
+                    document.getElementById('result').innerHTML = resultHtml;
+
+                    try {
+                        navigator.clipboard.writeText(fullUrl);
+                    } catch (e) {
+                        console.error(e);
+                    }
+
+                    await uploadFiles(r.url, r.secrets, (p) => {
+                        const progressEl = document.getElementById('upload-progress');
+                        if (progressEl) progressEl.value = p;
                     });
+
+                    document.getElementById('result').innerHTML = resultHtml;
+                    
+                    clearText();
+                    clearFiles();
+                })
+                .catch(err => {
+                    showError(err);
+                });
             }
-            function encode(message) {
-                let enc = new TextEncoder();
-                return enc.encode(message);
-            }
-            async function encrypt(data) {
-                return window.crypto.subtle.encrypt(
-                    { name: "AES-GCM", iv: iv },
-                    key,
-                    data,
-                );
-            }
+
+            document.getElementById('secret-form').addEventListener('submit', submitForm);
         </script>
     </body>
 </html>

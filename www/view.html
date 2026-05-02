@@ -9,9 +9,148 @@
         <link rel="stylesheet" href="/www/pico.min.css" />
         <link rel="icon" href="/www/ss-ico.svg" type="image/svg+xml" />
     </head>
-    <body class="container">
-        <article style="margin-top: 1rem">
-            <a href="?view">View Secret</a>
-        </article>
+    <body onload="init()" class="container">
+        <div style="margin-top: 1rem">
+            <div id="result"></div>
+            <progress id="progress" max="100" style="display: none;"></progress>
+        </div>
+        <script src="/www/crypto.js"></script>
+        <script>
+            var iv, key;
+            
+            function sizer(b) {
+                var i = -1;
+                var byteUnits = [" kB", " MB", " GB", " TB", "PB", "EB", "ZB", "YB"];
+                do { b /= 1024; i++; } while (b > 1024);
+                return Math.max(b, 0.1).toFixed(1) + byteUnits[i];
+            }
+            
+            function b64ToAB(base64) {
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes;
+            }
+            
+            async function downloadWS(parentId, secretId, filename, length) {
+                return new Promise((resolve, reject) => {
+                    const progress = document.getElementById("progress-" + secretId);
+                    const wsUrl = location.origin.replace("http:", "ws:").replace("https:", "wss:") + "/" + parentId + "/" + secretId + "?view";
+                    console.log("WebSocket URL:", wsUrl, "origin:", location.origin, "host:", location.host);
+                    const ws = new WebSocket(wsUrl);
+                    const chunks = [];
+                    
+                    let wsClosed = false;
+                    
+                    ws.onmessage = async (event) => {
+                        if (wsClosed) {
+                            console.log("WS already closed, ignoring message");
+                            return;
+                        }
+                        const msg = JSON.parse(event.data);
+                        console.log("WS msg:", msg.current, msg.total, "chunks so far:", chunks.length);
+                        const dataBytes = b64ToAB(msg.data);
+                        console.log("dataBytes length:", dataBytes.length);
+                        try {
+                            const chunkIv = new Uint8Array(iv.length);
+                            chunkIv.set(iv);
+                            const counter = new Uint8Array(4);
+                            new DataView(counter.buffer).setUint32(0, msg.current, false);
+                            chunkIv.set(counter, iv.length - 4);
+                            const decrypted = await decrypt(dataBytes, chunkIv, key);
+                            console.log("decrypted length:", decrypted.byteLength);
+                            chunks.push(decrypted);
+                            console.log("chunks pushed, now have", chunks.length, "chunks");
+                        } catch(e) {
+                            console.log("decrypt error on chunk", msg.current, ":", e.message);
+                            // continue, don't add to chunks
+                        }
+                        
+                        if (progress) {
+                            progress.style.display = "block";
+                            progress.setAttribute("value", Math.floor(((msg.current + 1) / msg.total) * 100));
+                        }
+                        
+                        if (msg.current >= msg.total - 1) {
+                            wsClosed = true;
+                            ws.close();
+                            console.log("All chunks received, have", chunks.length, "valid chunks");
+                            if (chunks.length > 0) {
+                                const blob = new Blob(chunks, { type: "application/octet-stream" });
+                                console.log("Blob size:", blob.size);
+                                let link = document.createElement("a");
+                                link.href = window.URL.createObjectURL(blob);
+                                link.download = filename;
+                                document.getElementById("result-" + secretId).append(link);
+                                link.click();
+                                resolve();
+                            } else {
+                                document.getElementById("result-" + secretId).innerText = "Error: no valid chunks";
+                                reject(new Error("No valid chunks"));
+                            }
+                        }
+                    };
+                    
+                    ws.onerror = (error) => reject(error);
+                });
+            }
+            
+            async function init() {
+                console.log("Template IV: '{{.Iv}}'");
+                let ivBase64 = "{{.Iv}}";
+                if (!ivBase64) {
+                    const pathParts = location.pathname.split("/");
+                    ivBase64 = pathParts[2];
+                    console.log("URL IV:", ivBase64);
+                }
+                try {
+                    iv = b64ToAB(ivBase64);
+                } catch(e) {
+                    console.log("Failed to decode IV:", e);
+                }
+                
+                console.log("Template Key: '{{.Key}}'");
+                key = await window.crypto.subtle.importKey(
+                    "raw",
+                    b64ToAB("{{.Key}}"),
+                    "AES-GCM",
+                    false,
+                    ["encrypt", "decrypt"]
+                );
+                
+                const parentId = "{{.ParentID}}";
+                const secrets = JSON.parse('{{json .Secrets}}');
+                const resultDiv = document.getElementById("result");
+                
+                for (const secret of secrets) {
+                    const dataBytes = b64ToAB(secret.Data);
+                    const decrypted = await decrypt(dataBytes, iv, key);
+                    const decryptedText = new TextDecoder().decode(decrypted);
+                    
+                    const itemDiv = document.createElement("article");
+                    itemDiv.id = "item-" + secret.ID;
+                    
+                    if (secret.Type === "file") {
+                        const filename = decryptedText;
+                        itemDiv.innerHTML = `
+                            <div id="result-${secret.ID}">${filename} (${sizer(secret.Length)})</div>
+                            <progress id="progress-${secret.ID}" max="100" style="display: none;"></progress>
+                        `;
+                        resultDiv.appendChild(itemDiv);
+                        
+                        if (!secret.Downloaded) {
+                            await downloadWS(parentId, secret.ID, filename, secret.Length);
+                        } else {
+                            document.getElementById("result-" + secret.ID).innerText = filename + " (already downloaded)";
+                        }
+                    } else {
+                        itemDiv.innerText = decryptedText;
+                        resultDiv.appendChild(itemDiv);
+                    }
+                }
+            }
+        </script>
     </body>
 </html>

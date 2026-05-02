@@ -16,7 +16,7 @@ onmessage = (msg) => {
           "Content-Type": "application/octet-stream",
           "Content-Range": chunk + "/" + (chunks - 1),
         },
-        body: await encrypt(result, iv, key),
+        body: await encrypt(result),
       }).then((res) => {
         if (res.ok) {
           offset += event.target.result.byteLength;

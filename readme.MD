@@ -3,33 +3,63 @@ Ever wanted to share a file or information via a link that only works once and d
 Then this is the service for you.
 
 You can self host this service behind whatever reverse proxy you prefer.
-To build:
-1. Install go on your build system.
-2. Clone this repo.
-3. cd into repo.
-4. go build -ldflags="-s -w"
 
+## Build
+```
+go build -ldflags="-s -w"
+```
 
-Run once to generate the config in the same folder as application.
-Or
-Use the following environmental variables:
-- server_name
-- server_port
-- server_domain
-- server_apikey
-- database_name
-- database_key
-- captcha_enabled
-- captcha_sitekey
-- captcha_secretkey
-- captcha_score
+## Configuration
+Configure using environment variables:
 
-This service was made over 2 days for fun and is getting the rough edges worked on to get it to version 1.
-To Do:
-- [X] Implement short urls.
-- [X] Embed web folder
-- [ ] Finalize CSS
-- [X] File encryption
-- [X] DB encryption
-- [X] ENV variable support
-- [ ] Auto Container Release
+| Variable | Description | Default |
+|----------|-------------|---------|
+| SS_DOMAIN | Domain name for SSL (e.g., secretservice.au) | secretservice.au |
+| SS_PATH | Directory for file storage | /mnt/cache |
+| SS_PORT | HTTP port for proxy mode | 80 |
+| SS_SSL | HTTPS port for standalone mode | 443 |
+| SS_PROXY | Set to "true" if behind a reverse proxy | false |
+| SS_CHUNK | Chunk size for file uploads in bytes | 1048576 (1MB) |
+
+## Deployment
+
+### Standalone (with ACME SSL)
+```bash
+SS_DOMAIN=secretservice.example.com SS_PATH=/var/lib/secretservice ./secretservice
+```
+
+### Behind Reverse Proxy
+```bash
+SS_DOMAIN=secretservice.example.com SS_PROXY=true SS_PORT=8080 ./secretservice
+```
+
+### OpenRC (Gentoo/Alpine)
+Copy the service files:
+```bash
+cp etc/init.d/secretservice /etc/init.d/
+cp etc/conf.d/secretservice /etc/conf.d/
+rc-update add secretservice default
+rc-service secretservice start
+```
+
+## Features
+- [x] End-to-end encryption for text and files
+- [x] Short URLs for easy sharing
+- [x] Automatic expiration
+- [x] WebSocket-based file uploads/downloads
+- [x] Multiple secrets per submission
+- [x] Self-hosted
+
+## API Format
+```json
+{
+  "short": true,
+  "expiry": 24,
+  "secrets": [
+    {"type": "text", "data": "<encrypted>", "length": 100},
+    {"type": "file", "data": "<encrypted_filename>", "length": 1048576}
+  ],
+  "key": "<base64_key>",
+  "iv": "<base64_iv>"
+}
+```
