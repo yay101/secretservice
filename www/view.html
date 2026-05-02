@@ -38,7 +38,6 @@
                 return new Promise((resolve, reject) => {
                     const progress = document.getElementById("progress-" + secretId);
                     const wsUrl = location.origin.replace("http:", "ws:").replace("https:", "wss:") + "/" + parentId + "/" + secretId + "?view";
-                    console.log("WebSocket URL:", wsUrl, "origin:", location.origin, "host:", location.host);
                     const ws = new WebSocket(wsUrl);
                     const chunks = [];
                     
@@ -46,13 +45,10 @@
                     
                     ws.onmessage = async (event) => {
                         if (wsClosed) {
-                            console.log("WS already closed, ignoring message");
                             return;
                         }
                         const msg = JSON.parse(event.data);
-                        console.log("WS msg:", msg.current, msg.total, "chunks so far:", chunks.length);
                         const dataBytes = b64ToAB(msg.data);
-                        console.log("dataBytes length:", dataBytes.length);
                         try {
                             const chunkIv = new Uint8Array(iv.length);
                             chunkIv.set(iv);
@@ -60,12 +56,9 @@
                             new DataView(counter.buffer).setUint32(0, msg.current, false);
                             chunkIv.set(counter, iv.length - 4);
                             const decrypted = await decrypt(dataBytes, chunkIv, key);
-                            console.log("decrypted length:", decrypted.byteLength);
                             chunks.push(decrypted);
-                            console.log("chunks pushed, now have", chunks.length, "chunks");
                         } catch(e) {
-                            console.log("decrypt error on chunk", msg.current, ":", e.message);
-                            // continue, don't add to chunks
+                            console.error("decrypt error on chunk", msg.current, ":", e.message);
                         }
                         
                         if (progress) {
@@ -76,10 +69,8 @@
                         if (msg.current >= msg.total - 1) {
                             wsClosed = true;
                             ws.close();
-                            console.log("All chunks received, have", chunks.length, "valid chunks");
                             if (chunks.length > 0) {
                                 const blob = new Blob(chunks, { type: "application/octet-stream" });
-                                console.log("Blob size:", blob.size);
                                 let link = document.createElement("a");
                                 link.href = window.URL.createObjectURL(blob);
                                 link.download = filename;
@@ -98,23 +89,35 @@
             }
             
             async function init() {
-                console.log("Template IV: '{{.Iv}}'");
+                function base64UrlDecode(str) {
+                    str = str.replace(/-/g, '+').replace(/_/g, '/');
+                    while (str.length % 4) str += '=';
+                    return str;
+                }
+                
                 let ivBase64 = "{{.Iv}}";
                 if (!ivBase64) {
                     const pathParts = location.pathname.split("/");
-                    ivBase64 = pathParts[2];
-                    console.log("URL IV:", ivBase64);
+                    if (pathParts.length >= 3) {
+                        ivBase64 = pathParts[2];
+                    }
                 }
+                ivBase64 = base64UrlDecode(ivBase64);
                 try {
                     iv = b64ToAB(ivBase64);
                 } catch(e) {
-                    console.log("Failed to decode IV:", e);
+                    console.error("Failed to decode IV:", e);
                 }
                 
-                console.log("Template Key: '{{.Key}}'");
+                let keyBase64 = "{{.Key}}";
+                if (!keyBase64) {
+                    keyBase64 = location.hash.substring(1);
+                }
+                keyBase64 = base64UrlDecode(keyBase64);
+                
                 key = await window.crypto.subtle.importKey(
                     "raw",
-                    b64ToAB("{{.Key}}"),
+                    b64ToAB(keyBase64),
                     "AES-GCM",
                     false,
                     ["encrypt", "decrypt"]

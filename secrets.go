@@ -55,7 +55,6 @@ type BatchResponse struct {
 func newSecret(w http.ResponseWriter, r *http.Request) {
 	var req SecretRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
-	log.Printf("newSecret: got key=%s iv=%s short=%v", req.Key, req.Iv, req.Short)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -73,7 +72,6 @@ func newSecret(w http.ResponseWriter, r *http.Request) {
 
 	for _, item := range req.Secrets {
 		secretID := randomString(64)
-		log.Printf("newSecret: storing item type=%s data=%s (len=%d), raw bytes: %v", item.Type, item.Data, len(item.Data), []byte(item.Data))
 		scrt := &secret{
 			ID:        secretID,
 			ParentID:  parentID,
@@ -81,9 +79,12 @@ func newSecret(w http.ResponseWriter, r *http.Request) {
 			Data:      item.Data,
 			Length:    uint64(item.Length),
 			Expiry:    expiry,
-			Key:       req.Key,
-			Iv:        req.Iv,
 			ShortCode: shortCode,
+		}
+
+		if req.Key != "" {
+			scrt.Key = req.Key
+			scrt.Iv = req.Iv
 		}
 
 		if item.Type == File {
@@ -137,7 +138,6 @@ type WSMessage struct {
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request, parentID string, secretID string) {
-	log.Printf("handleWebSocket called for parentID: %s, secretID: %s", parentID, secretID)
 	se, err := ss.Get(secretID)
 	if err != nil || se.Type != File {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -164,7 +164,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, parentID string, se
 		for {
 			var msg WSMessage
 			err := conn.ReadJSON(&msg)
-			log.Printf("Upload: received msg current=%d total=%d", msg.Current, msg.Total)
 			if err != nil {
 				log.Printf("Upload: connection closed, err=%v", err)
 				break
@@ -176,7 +175,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, parentID string, se
 				break
 			}
 
-			log.Printf("Upload: writing %d bytes at offset %d", len(data), int64(msg.Current)*(int64(conf.Chunksize)+16))
 			_, err = file.WriteAt(data, int64(msg.Current)*(int64(conf.Chunksize)+16))
 			if err != nil {
 				log.Print(err)
@@ -185,9 +183,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, parentID string, se
 
 			conn.WriteJSON(map[string]int{"ack": msg.Current})
 
-			log.Printf("Upload: current=%d total=%d, checking %d == %d", msg.Current, msg.Total, msg.Current, msg.Total-1)
 			if msg.Current == msg.Total-1 {
-				log.Printf("Upload complete for %s, marking uploaded", secretID)
+				log.Printf("Upload complete for %s", secretID)
 				ss.MarkUploaded(secretID)
 			}
 		}
@@ -219,21 +216,33 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, parentID string, se
 		ss.MarkDownloaded(secretID)
 		ss.Del(se)
 		os.Remove(fp)
+
+		all, err := ss.GetByParentID(se.ParentID)
+		if err == nil {
+			filesRemaining := false
+			for _, s := range all {
+				if s.Type == File && !s.Downloaded {
+					filesRemaining = true
+					break
+				}
+			}
+			if !filesRemaining {
+				ss.DelByParentID(se.ParentID)
+			}
+		}
+
 		log.Printf("Download complete and cleaned up for %s", secretID)
 	}
 }
 
 func viewSecret(w http.ResponseWriter, r *http.Request, parentID string) {
-	log.Printf("viewSecret called for parentID: %s", parentID)
 	secrets, err := ss.GetByParentID(parentID)
 	if err != nil || len(secrets) == 0 {
-		log.Printf("viewSecret: secrets not found for parentID: %s, err: %v", parentID, err)
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
 	first := secrets[0]
-	log.Printf("viewSecret: found %d secrets, first type=%s uploaded=%v", len(secrets), first.Type, first.Uploaded)
 
 	data := struct {
 		ParentID string
@@ -247,7 +256,7 @@ func viewSecret(w http.ResponseWriter, r *http.Request, parentID string) {
 		Secrets:  secrets,
 	}
 
-	log.Printf("viewSecret: id=%s type=%s key=%s iv=%s", first.ID, first.Type, first.Key, first.Iv)
+	log.Printf("viewSecret: id=%s type=%s", first.ID, first.Type)
 	err = vtemplate.Execute(w, data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

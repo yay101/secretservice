@@ -192,7 +192,6 @@ func serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := match.FindStringSubmatch(r.RequestURI)
-	log.Printf("Request: '%s' code: '%v' len: %d", r.RequestURI, code, len(code))
 	if len(code) > 1 {
 		r.ParseForm()
 
@@ -203,7 +202,6 @@ func serve(w http.ResponseWriter, r *http.Request) {
 				parentID := seByShort[0].ParentID
 				iv := seByShort[0].Iv
 				redirectURL := "https://" + conf.Domain + "/" + parentID + "/" + iv
-				log.Printf("Redirecting short URL to: %s", redirectURL)
 				http.Redirect(w, r, redirectURL, http.StatusFound)
 				return
 			}

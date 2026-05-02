@@ -96,6 +96,22 @@ func (s *SecretService) Del(se *secret) error {
 	return nil
 }
 
+func (s *SecretService) DelByParentID(parentID string) error {
+	all, err := secrets.Filter(func(se secret) bool {
+		return se.ParentID == parentID
+	})
+	if err != nil {
+		return err
+	}
+	for _, se := range all {
+		err = s.Del(&se)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *SecretService) Expire() error {
 	now := time.Now()
 	var expired []secret

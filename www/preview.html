@@ -11,7 +11,10 @@
     </head>
     <body class="container">
         <article style="margin-top: 1rem">
-            <a href="?view">View Secret</a>
+            <a id="view-link" href="?view">View Secret</a>
         </article>
+        <script>
+            document.getElementById("view-link").href = "?view" + location.hash;
+        </script>
     </body>
 </html>

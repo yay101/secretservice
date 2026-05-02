@@ -42,7 +42,6 @@
         </main>
         <script src="/www/crypto.js"></script>
         <script>
-            console.log("index.html script loaded");
             const MAX_CONCURRENT_UPLOADS = 3;
             let activeUploads = 0;
             let iv, key;
@@ -96,13 +95,18 @@
                     fileRegistry.set(file.size, file);
                 }
                 
-                return {
+                const req = {
                     short: isShort,
                     expiry: expiry,
                     secrets: secrets,
-                    key: keyBase64,
-                    iv: ivBase64
                 };
+                
+                if (isShort) {
+                    req.key = keyBase64;
+                    req.iv = ivBase64;
+                }
+                
+                return req;
             }
 
             async function encryptData(data, iv, key) {
@@ -115,7 +119,13 @@
 
             function base64Encode(bytes) {
                 const str = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
-                return btoa(str);
+                return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+
+            function base64UrlDecode(str) {
+                str = str.replace(/-/g, '+').replace(/_/g, '/');
+                while (str.length % 4) str += '=';
+                return str;
             }
 
             async function generateCryptoKeys() {
@@ -130,12 +140,11 @@
                     iv: ivBytes,
                     key: key,
                     keyBase64: base64Encode(new Uint8Array(rawKey)),
-                    ivBase64: btoa(String.fromCharCode.apply(null, ivBytes))
+                    ivBase64: base64Encode(ivBytes)
                 };
             }
 
             async function uploadFile(wsUrl, file, onProgress) {
-                console.log("uploadFile called, wsUrl:", wsUrl, "file:", file.name, "size:", file.size, "global iv:", iv, "global key:", key);
                 return new Promise((resolve, reject) => {
                     const ws = new WebSocket(wsUrl);
                     const chunkSize = {{.Chunksize}};
@@ -205,26 +214,21 @@
                 let totalChunks = 0;
                 const fileData = [];
                 
-                console.log("uploadFiles called with url:", url, "secrets:", JSON.stringify(secrets));
                 let fileCount = 0;
                 for (const secret of secrets) {
-                    console.log("Checking secret:", secret.id, "type:", secret.type, "uploaded:", secret.uploaded);
                     if (secret.type === 'file' && (secret.uploaded === false || secret.uploaded === undefined)) {
                         fileCount++;
                         const file = fileRegistry.get(secret.length);
                         if (file) {
                             const chunks = Math.ceil(file.size / chunkSize);
-                            console.log("File:", file.name, "size:", file.size, "chunks:", chunks);
                             totalChunks += chunks;
                             fileData.push({ secret, file, chunks });
                         }
                     }
                 }
-                console.log("Total files:", fileCount, "totalChunks:", totalChunks);
                 
                 let chunksDone = 0;
                 const updateProgress = (totalChunksDone) => {
-                    console.log("Progress update:", totalChunksDone, "/", totalChunks, "=", (totalChunksDone / totalChunks) * 100);
                     if (onProgress) {
                         onProgress((totalChunksDone / totalChunks) * 100);
                     }
@@ -237,7 +241,6 @@
                     activeUploads++;
                     const urlParts = url.replace("https://" + window.location.host + "/", "").split("/");
                     const wsUrl = `wss://${window.location.host}/${urlParts[0]}/${secret.id}`;
-                    console.log("uploadFile wsUrl:", wsUrl);
                     await uploadFile(wsUrl, file, (fileChunksDone) => {
                         updateProgress(chunksDone + fileChunksDone);
                     });
@@ -251,7 +254,6 @@
             }
 
             async function submitForm(event) {
-                console.log("submitForm called, event:", event);
                 event.preventDefault();
                 
                 const text = getText();
@@ -283,7 +285,12 @@
                 })
                 .then(r => r.ok ? r.json() : Promise.reject(r.text()))
                 .then(async (r) => {
-                    const fullUrl = requestData.short ? r.short : r.url;
+                    let fullUrl;
+                    if (requestData.short) {
+                        fullUrl = r.short;
+                    } else {
+                        fullUrl = r.url + "/" + ivBase64 + "#" + keyBase64;
+                    }
                     const resultHtml = buildResultHtml(fullUrl, r.secrets);
                     document.getElementById('result').innerHTML = resultHtml;
 
